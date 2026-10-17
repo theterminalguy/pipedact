@@ -1,0 +1,51 @@
+version: "1.0"
+jurisdiction: "CA-PIPEDA"
+
+privacy_officer:
+  name: "Data Privacy Officer"
+  email: "privacy@organization.ca"
+  dispute_url: "https://organization.ca/legal/privacy/dispute"
+
+# Principle 2 & 4: Limiting Collection & Identifying Purposes
+schemas:
+  enforcePurposeTags: true
+  allowedPurposes:
+    - user_authentication
+    - billing_tax_invoicing
+    - order_fulfillment
+    - security_fraud_prevention
+    - analytics_consented
+
+# Principle 7: Safeguards (Redact Logging Sinks)
+sinks:
+  disallowedLogIdentifiers:
+    - canadian_sin
+    - credit_card
+    - phone_number
+    - email_address
+    - provincial_health_card
+  blockSinks:
+    - console.log
+    - console.error
+    - logger.*
+    - logging.*
+    - print
+
+# Principle 5: Retention Enforcement
+retention:
+  defaultMaxTtlDays: 730
+  requireHardDeleteSchedule: true
+
+ignore:
+  - "**/*_test.go"
+  - "**/*.spec.ts"
+  - "**/*.test.ts"
+  - "testdata/**"
+  - "pkg/fix/**"
+  - "pkg/rules/**"
+  - "pkg/web/static/**"
+  - "node_modules/**"
+  - "vendor/**"
+  - ".git/**"
+  - "dist/**"
+  - "build/**"

@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// VIOLATION [Principle 4 & 2]: Missing @privacy purpose declarations and unbounded retention
+model UserAccount {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  canadianSIN     String   // High risk identifier with no stated lawful purpose
+  creditCardToken String
+  medicalNotes    String?  // Health information collected without classification
+  createdAt       DateTime @default(now())
+  // VIOLATION [Principle 5 - Retention]: No TTL index or expiration timestamp
+}
