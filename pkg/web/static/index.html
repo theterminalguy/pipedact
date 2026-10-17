@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pipedact — PIPEDA Privacy-as-Code & OPC Compliance Suite</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            canadian: {
+              red: '#ef4444',
+              crimson: '#dc2626'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .code-editor-line-numbers {
+      counter-reset: line;
+    }
+    .editor-line-number::before {
+      counter-increment: line;
+      content: counter(line);
+      display: inline-block;
+      width: 2.2rem;
+      padding-right: 0.8rem;
+      margin-right: 0.5rem;
+      color: #64748b;
+      text-align: right;
+      user-select: none;
+      border-right: 1px solid #334155;
+    }
+    .violation-highlight {
+      background: rgba(239, 68, 68, 0.15);
+      border-bottom: 2px dashed #f87171;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Header Navigation -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-brand-600 via-indigo-600 to-rose-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-bold text-lg">
+          🍁
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-lg tracking-tight text-white font-mono">pipedact</span>
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded-full">CA-PIPEDA</span>
+            <span class="px-2 py-0.5 text-[10px] font-medium bg-slate-800 text-slate-400 rounded-full border border-slate-700">v1.2.0</span>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">Privacy-as-Code Linter & OPC Schedule 1 Self-Assessment Suite</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center space-x-1 bg-slate-950/60 p-1.5 rounded-xl border border-slate-800 text-xs sm:text-sm font-medium">
+        <button onclick="switchTab('scanner')" id="tab-btn-scanner" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 bg-brand-600 text-white shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          <span>Scanner & Auto-Fix</span>
+        </button>
+        <button onclick="switchTab('dossier')" id="tab-btn-dossier" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 text-slate-400 hover:text-slate-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>OPC Dossier</span>
+          <span id="nav-score-badge" class="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 text-[11px] rounded font-mono font-bold">82%</span>
+        </button>
+        <button onclick="switchTab('cicd')" id="tab-btn-cicd" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 text-slate-400 hover:text-slate-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span>CI/CD & CLI</span>
+        </button>
+        <button onclick="switchTab('rules')" id="tab-btn-rules" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 text-slate-400 hover:text-slate-200">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+          <span>10 Principles Matrix</span>
+        </button>
+      </nav>
+
+      <!-- Quick Action: Export Dossier -->
+      <div class="hidden md:flex items-center gap-2">
+        <button onclick="exportDossier('markdown')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          Export Report
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: SCANNER & PLAYGROUND -->
+    <!-- ========================================== -->
+    <div id="view-scanner" class="flex-1 flex flex-col gap-4">
+      <!-- Toolbar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-md">
+        <div class="flex items-center flex-wrap gap-2">
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider pl-1">Preset Scenarios:</label>
+          <div class="inline-flex rounded-lg bg-slate-950 p-1 border border-slate-800 text-xs">
+            <button onclick="loadPreset('ts_backend')" class="preset-btn px-2.5 py-1 rounded-md text-slate-300 hover:text-white bg-slate-800 font-medium">Node / Express Auth</button>
+            <button onclick="loadPreset('prisma_schema')" class="preset-btn px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Prisma DB Schema</button>
+            <button onclick="loadPreset('python_analytics')" class="preset-btn px-2.5 py-1 rounded-md text-slate-400 hover:text-white">Python Data Science</button>
+            <button onclick="loadPreset('dsr_export')" class="preset-btn px-2.5 py-1 rounded-md text-slate-400 hover:text-white">DSR User Export Handler</button>
+          </div>
+          <span class="h-4 w-[1px] bg-slate-700 hidden sm:block"></span>
+          <span id="detected-stats-pill" class="text-xs text-slate-400 flex items-center gap-1.5 bg-slate-800/60 px-2.5 py-1 rounded-md border border-slate-700/60">
+            <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            <span id="summary-badge-text">3 PIPEDA Violations Detected</span>
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="runAutoRedaction()" class="px-3 py-1.5 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition shadow-emerald-700/20" title="Automatically patch identified PIPEDA violations">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            Auto-Redact & Patch
+          </button>
+          <button onclick="runPipedactAudit()" class="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Run Audit
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor & Findings 2-Column Split -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
+        
+        <!-- Left: Code Editor Window -->
+        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xl">
+          <div class="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full bg-rose-500/70 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-amber-500/70 inline-block"></span>
+              <span class="w-3 h-3 rounded-full bg-emerald-500/70 inline-block"></span>
+              <span id="editor-filename" class="ml-2 font-mono text-xs text-slate-300">src/auth/register.controller.ts</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-500 font-mono">UTF-8</span>
+              <button onclick="copyCode()" class="text-slate-400 hover:text-slate-200 text-xs px-2 py-0.5 rounded border border-slate-800 hover:bg-slate-800 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Copy
+              </button>
+            </div>
+          </div>
+
+          <!-- Code Textarea with Real-time Analysis Overlay -->
+          <div class="relative flex-1 min-h-[460px] bg-slate-950 p-3 font-mono text-xs leading-relaxed overflow-hidden">
+            <textarea id="code-input" spellcheck="false" oninput="handleCodeChange()" class="w-full h-full bg-transparent text-slate-200 font-mono text-xs outline-none resize-none z-10 relative focus:ring-0 leading-relaxed pl-2"></textarea>
+          </div>
+          
+          <!-- Bottom Info Bar -->
+          <div class="bg-slate-950/80 px-4 py-2 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-brand-400"></span>
+                <span>Target: Schedule 1 (10 Principles)</span>
+              </span>
+              <span>SIN Luhn Check: Active</span>
+            </div>
+            <span id="code-length-indicator">0 lines</span>
+          </div>
+        </div>
+
+        <!-- Right: Diagnostic Linter Findings & Violations Breakdown -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex-1 flex flex-col shadow-xl">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 bg-brand-500/10 text-brand-400 rounded-lg">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                </div>
+                <h3 class="font-semibold text-sm text-slate-100">pipedact Diagnostic Findings</h3>
+              </div>
+              <span id="findings-count-badge" class="px-2 py-0.5 text-xs font-mono font-semibold bg-rose-500/20 text-rose-300 rounded-full border border-rose-500/30">
+                0 Violations
+              </span>
+            </div>
+
+            <!-- Scrollable Violations List -->
+            <div id="violations-list" class="flex-1 overflow-y-auto mt-3 space-y-3 pr-1 max-h-[480px]">
+              <!-- Dynamically populated violation cards -->
+            </div>
+
+            <!-- Bottom Quick Summary Box -->
+            <div class="mt-4 p-3 rounded-lg bg-slate-950/70 border border-slate-800 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-400">CI Build Status:</span>
+                <span id="simulated-ci-status" class="font-mono font-bold text-rose-400">FAIL (Exit 1)</span>
+              </div>
+              <button onclick="switchTab('dossier')" class="text-brand-400 hover:text-brand-300 font-medium underline flex items-center gap-1">
+                View OPC Matrix &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: OPC SELF-ASSESSMENT DOSSIER -->
+    <!-- ========================================== -->
+    <div id="view-dossier" class="hidden flex-1 flex flex-col gap-6">
+      
+      <!-- Top Score Hero Banner -->
+      <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="space-y-2">
+          <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-400 text-xs font-semibold">
+            <span>🍁</span> Official OPC Self-Assessment Alignment (Schedule 1)
+          </div>
+          <h2 class="text-2xl font-bold text-white tracking-tight">PIPEDA Compliance & Readiness Dossier</h2>
+          <p class="text-sm text-slate-400 max-w-2xl leading-relaxed">
+            Consolidated diagnostic report synthesizing automated static code analysis findings with operational governance controls across the 10 Fair Information Principles.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-6 bg-slate-950/80 px-6 py-4 rounded-xl border border-slate-800">
+          <div class="text-center">
+            <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold block mb-1">Compliance Score</span>
+            <div class="flex items-baseline justify-center gap-1">
+              <span id="hero-score-val" class="text-4xl font-black text-emerald-400 font-mono">82</span>
+              <span class="text-slate-500 font-mono text-sm">/ 100</span>
+            </div>
+            <span id="hero-score-label" class="text-[10px] text-emerald-400/90 font-medium block mt-1">Substantial Compliance</span>
+          </div>
+          
+          <div class="h-12 w-[1px] bg-slate-800"></div>
+
+          <div class="flex flex-col gap-2">
+            <button onclick="exportDossier('markdown')" class="px-3 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Export Markdown (.md)
+            </button>
+            <button onclick="exportDossier('sarif')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+              Export SARIF (CI/CD)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Principles Checklist & Status Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="principles-card-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: CI/CD & CLI SIMULATOR -->
+    <!-- ========================================== -->
+    <div id="view-cicd" class="hidden flex-1 flex flex-col gap-6">
+      
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Interactive Terminal Simulator -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl flex flex-col h-full min-h-[480px]">
+            <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+                <span class="text-xs font-mono text-slate-400 ml-2">bash — pipedact CLI Runner</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="runCliSimulate(false)" class="text-xs px-2.5 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded font-mono flex items-center gap-1">
+                  Run $ pipedact check
+                </button>
+                <button onclick="runCliSimulate(true)" class="text-xs px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded font-mono flex items-center gap-1">
+                  Run with --fix
+                </button>
+              </div>
+            </div>
+
+            <!-- Terminal Output Body -->
+            <div id="terminal-body" class="p-4 bg-slate-950 font-mono text-xs text-slate-300 leading-relaxed overflow-y-auto flex-1 select-text">
+              <p class="text-slate-500">// pipedact v1.2.0 - Statutory Privacy Linter for PIPEDA</p>
+              <p class="text-slate-500">// Ready. Press 'Run $ pipedact check' above to execute a simulated pipeline check.</p>
+            </div>
+            
+            <div class="px-4 py-2 bg-slate-950/80 border-t border-slate-800 text-[11px] text-slate-500 font-mono flex items-center justify-between">
+              <span>Environment: Linux x86_64 (CI Runner)</span>
+              <span id="cli-terminal-exitcode">Exit: 0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Config Editor & GitHub Action YAML -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+          <!-- .pipedactrc.yaml Config -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-bold text-indigo-400">.pipedactrc.yaml</span>
+                <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Project Policy Manifest</span>
+              </div>
+              <button onclick="copyPipedactYaml()" class="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Copy
+              </button>
+            </div>
+            <div class="mt-3">
+              <textarea id="yaml-config-input" rows="8" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 font-mono text-xs text-slate-300 leading-relaxed outline-none focus:border-brand-500" spellcheck="false">version: "1.0"
+jurisdiction: "CA-PIPEDA"
+
+# Principle 4: Limiting Collection
+schemas:
+  enforcePurposeTags: true
+  allowedPurposes:
+    - user_authentication
+    - billing_tax_invoicing
+    - order_fulfillment
+
+# Principle 7: Safeguards (Redact Logging Sinks)
+sinks:
+  disallowedLogIdentifiers:
+    - canadian_sin
+    - credit_card
+    - phone_number
+    - email_address
+  blockSinks:
+    - console.log
+    - logger.*
+    - print
+
+# Principle 5: Retention Enforcement
+retention:
+  defaultMaxTtlDays: 730
+  requireHardDeleteSchedule: true</textarea>
+            </div>
+          </div>
+
+          <!-- GitHub Actions Integration Workflow -->
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl flex flex-col">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-bold text-slate-300">.github/workflows/pipeda.yml</span>
+              </div>
+              <button onclick="copyGithubWorkflow()" class="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Copy
+              </button>
+            </div>
+            <pre class="mt-3 p-2.5 bg-slate-950 border border-slate-800 rounded-lg font-mono text-[11px] text-slate-400 overflow-x-auto leading-relaxed"><code>name: PIPEDA Compliance Gate
+on: [push, pull_request]
+
+jobs:
+  privacy-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pipedact
+        run: curl -sSL https://get.pipedact.dev | sh
+      - name: Run Privacy Linter
+        run: pipedact check ./src --strict --format sarif --out audit.sarif
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: audit.sarif</code></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: 10 PRINCIPLES MATRIX & DOCS -->
+    <!-- ========================================== -->
+    <div id="view-rules" class="hidden flex-1 flex flex-col gap-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h2 class="text-xl font-bold text-white mb-2">PIPEDA Schedule 1 — 10 Fair Information Principles Technical Map</h2>
+        <p class="text-sm text-slate-400 max-w-3xl leading-relaxed">
+          How <span class="font-mono text-brand-400">pipedact</span> maps federal Canadian statutory requirements to automated static analysis rules, AST queries, and automated testing hooks.
+        </p>
+
+        <div class="mt-6 overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider">
+                <th class="py-3 px-4">Principle & Statute</th>
+                <th class="py-3 px-4">Statutory Meaning</th>
+                <th class="py-3 px-4">Automated Technical Gate in pipedact</th>
+                <th class="py-3 px-4">Severity</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800/60 font-sans">
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">1. Accountability</td>
+                <td class="py-3.5 px-4 text-slate-400">Designating a Privacy Officer and auditing 3rd-party transfers.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Audits external API URLs & SDK calls to unvetted sub-processors.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">MEDIUM</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">2. Identifying Purposes</td>
+                <td class="py-3.5 px-4 text-slate-400">Specify why information is collected before or at collection.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Rejects database migration or schema without <code class="text-indigo-400">@privacy(purpose)</code> tags.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">HIGH</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">3. Consent</td>
+                <td class="py-3.5 px-4 text-slate-400">Knowledge and meaningful consent before processing personal data.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Enforces conditional consent guard wrapper on tracking & marketing triggers.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">HIGH</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">4. Limiting Collection</td>
+                <td class="py-3.5 px-4 text-slate-400">Collect only what is necessary for declared purposes (Minimization).</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Detects over-collection fields (e.g., requesting SIN during registration).</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">HIGH</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">5. Retention & Disposal</td>
+                <td class="py-3.5 px-4 text-slate-400">Keep personal info only as long as necessary, then destroy or anonymize.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Ensures DB models declare TTL indexes or cron deletion cascades.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">MEDIUM</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">6. Accuracy</td>
+                <td class="py-3.5 px-4 text-slate-400">Keep personal data as accurate, complete and up-to-date as necessary.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Validates regex & format validators (e.g. Luhn algorithm for SIN).</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono">LOW</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">7. Safeguards</td>
+                <td class="py-3.5 px-4 text-slate-400">Protect information against loss, unauthorized access, copying, disclosure.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Blocks raw PII flowing to stdout, server logs, or unencrypted cookies.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono">CRITICAL</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">8. Openness</td>
+                <td class="py-3.5 px-4 text-slate-400">Make clear information about privacy policies readily available.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Checks presence of public privacy endpoints and versioned policy routes.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono">LOW</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">9. Individual Access</td>
+                <td class="py-3.5 px-4 text-slate-400">Upon request, inform individuals of existence, use, and disclosure + export.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Audits user data export routines to ensure all stored tables are included.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">MEDIUM</span></td>
+              </tr>
+              <tr class="hover:bg-slate-800/30">
+                <td class="py-3.5 px-4 font-semibold text-slate-200">10. Challenging Compliance</td>
+                <td class="py-3.5 px-4 text-slate-400">Address challenges and complaints concerning compliance.</td>
+                <td class="py-3.5 px-4 font-mono text-slate-300">Verifies privacy dispute contact points or ticketing integration routes.</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-slate-500/20 text-slate-300 font-mono">INFO</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-900 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <span>pipedact is an open-source statutory engineering initiative for Canadian Federal & Provincial compliance.</span>
+      </div>
+      <div class="text-slate-400">
+        Reference: <a href="https://www.priv.gc.ca" target="_blank" rel="noreferrer" class="underline hover:text-slate-200">Office of the Privacy Commissioner of Canada (OPC)</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPT ENGINE: AST / Pattern Scanner, Luhn, Dossier, and CLI Simulator -->
+  <script>
+    // --- Sample Presets with deliberate PIPEDA vulnerabilities & fixes ---
+    const PRESETS = {
+      ts_backend: {
+        filename: 'src/controllers/auth.controller.ts',
+        code: `import { Request, Response } from 'express';
+import { logger } from '../utils/logger';
+import { db } from '../database';
+
+export async function handleRegistration(req: Request, res: Response) {
+  const { email, password, sin, phone, healthCardNumber } = req.body;
+
+  // VIOLATION [Principle 7 - Safeguards]: Logging raw user PII & Canadian SIN
+  logger.info("New registration received for user:", {
+    email,
+    sin: "046-454-286", // Canadian SIN leaking to logs
+    phoneNumber: phone
+  });
+
+  // VIOLATION [Principle 3 - Consent]: Unconsented third-party marketing dispatch
+  await trackThirdPartyAdConversion({
+    customerEmail: email,
+    optInConfirmed: false // Dispatched without affirmative user consent
+  });
+
+  // VIOLATION [Principle 4 - Limiting Collection]: Unnecessary health card collection
+  const user = await db.user.create({
+    data: {
+      email,
+      passwordHash: hash(password),
+      socialInsuranceNumber: sin,
+      healthCardNumber: healthCardNumber // Health data collected for basic retail auth
+    }
+  });
+
+  return res.status(201).json({ success: true, userId: user.id });
+}`,
+        fixedCode: `import { Request, Response } from 'express';
+import { logger } from '../utils/logger';
+import { db } from '../database';
+import { hasConsentFor } from '../privacy/consent-guard';
+import { maskIdentifier } from '../privacy/redact';
+
+export async function handleRegistration(req: Request, res: Response) {
+  const { email, password, phone, userConsents } = req.body;
+
+  // FIXED [Principle 7 - Safeguards]: Sanitized & Redacted log output
+  logger.info("New registration received for user:", {
+    email: maskIdentifier(email),
+    hasPhone: Boolean(phone)
+  });
+
+  // FIXED [Principle 3 - Consent]: Guarded by affirmative consent check
+  if (hasConsentFor(userConsents, 'marketing_analytics')) {
+    await trackThirdPartyAdConversion({
+      customerEmail: maskIdentifier(email),
+      optInConfirmed: true
+    });
+  }
+
+  // FIXED [Principle 4 - Limiting Collection]: Dropped unnecessary health data
+  const user = await db.user.create({
+    data: {
+      email,
+      passwordHash: hash(password),
+      phoneNumber: phone
+    }
+  });
+
+  return res.status(201).json({ success: true, userId: user.id });
+}`
+      },
+
+      prisma_schema: {
+        filename: 'prisma/schema.prisma',
+        code: `datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// VIOLATION [Principle 4 & 2]: Missing @privacy purpose declarations and unbounded retention
+model UserAccount {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  canadianSIN     String   // High risk identifier with no stated lawful purpose
+  creditCardToken String
+  medicalNotes    String?  // Health information collected without classification
+  createdAt       DateTime @default(now())
+  // VIOLATION [Principle 5 - Retention]: No TTL index or expiration timestamp
+}`,
+        fixedCode: `datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// FIXED [Principle 2, 4 & 5]: Explicit purpose tags & automated retention policy
+model UserAccount {
+  id              String    @id @default(uuid())
+  email           String    @unique @privacy(purpose: "user_authentication", retention: "account_lifespan")
+  creditCardToken String    @privacy(purpose: "billing_fulfillment", retention: "transaction_plus_7yr")
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime? @privacy(autoPurge: true) // Schedule 1 Principle 5 compliant disposal
+}`
+      },
+
+      python_analytics: {
+        filename: 'analytics/telemetry.py',
+        code: `import logging
+import requests
+
+def record_session_event(user_data, session_payload):
+    # VIOLATION [Principle 7 - Safeguards]: Unmasked PII sent to standard logging
+    logging.info(f"Session started for {user_data.get('email')} with SIN {user_data.get('sin')}")
+
+    # VIOLATION [Principle 1 & 3]: Forwarding raw identity to external unvetted endpoint
+    requests.post("https://unverified-metrics-cdn.com/v1/event", json={
+        "sin": "046 454 286",
+        "email": user_data.get("email"),
+        "ip": session_payload.get("client_ip")
+    })`,
+        fixedCode: `import logging
+import hashlib
+from privacy.consent import verify_consent
+
+def record_session_event(user_data, session_payload, consent_token):
+    # FIXED [Principle 7 - Safeguards]: Zero-PII structured logging
+    user_hash = hashlib.sha256(user_data.get('email', '').encode()).hexdigest()[:12]
+    logging.info(f"Session started for anonymized subject ID: {user_hash}")
+
+    # FIXED [Principle 1 & 3]: Anonymized telemetry guarded by consent check
+    if verify_consent(consent_token, "telemetry_analytics"):
+        import requests
+        requests.post("https://approved-metrics.internal.ca/v1/event", json={
+            "pseudonym_id": user_hash
+        })`
+      },
+
+      dsr_export: {
+        filename: 'src/services/dsr-export.service.ts',
+        code: `// VIOLATION [Principle 9 - Individual Access]: Incomplete Personal Data Export Routine
+export async function generateUserArchive(userId: string) {
+  // Only exports profile, missing payment records and support communications
+  const profile = await db.userProfile.findUnique({ where: { userId } });
+  
+  // Missing: db.billingTransactions, db.auditLogs, db.thirdPartyShares
+  return {
+    exportedAt: new Date().toISOString(),
+    records: {
+      profile
+    }
+  };
+}`,
+        fixedCode: `// FIXED [Principle 9 - Individual Access]: Exhaustive Schedule 1 Compliant Export
+export async function generateUserArchive(userId: string) {
+  const [profile, transactions, accessLogs, consentAuditTrail] = await Promise.all([
+    db.userProfile.findUnique({ where: { userId } }),
+    db.billingTransactions.findMany({ where: { userId } }),
+    db.accessLogs.findMany({ where: { userId } }),
+    db.consentAuditTrail.findMany({ where: { userId } })
+  ]);
+  
+  return {
+    exportedAt: new Date().toISOString(),
+    subjectId: userId,
+    records: {
+      profile,
+      transactions,
+      accessLogs,
+      consentHistory: consentAuditTrail
+    }
+  };
+}`
+      }
+    };
+
+    // State
+    let currentPreset = 'ts_backend';
+    let currentViolations = [];
+    let isAutoFixed = false;
+
+    // --- OPC 10 Principles State for Dossier ---
+    const OPC_PRINCIPLES = [
+      { id: 1, name: "1. Accountability", weight: 10, automated: true, passing: true, note: "Data flows mapped; 3rd-party processors inventoried." },
+      { id: 2, name: "2. Identifying Purposes", weight: 10, automated: true, passing: false, note: "Unannotated schema fields missing lawful purpose tags." },
+      { id: 3, name: "3. Consent", weight: 15, automated: true, passing: false, note: "Third-party dispatch occurs without verified opt-in." },
+      { id: 4, name: "4. Limiting Collection", weight: 10, automated: true, passing: false, note: "Excessive PII requested (health card/SIN during retail registration)." },
+      { id: 5, name: "5. Retention & Disposal", weight: 10, automated: true, passing: false, note: "Missing automated TTL disposal or anonymization triggers." },
+      { id: 6, name: "6. Accuracy", weight: 5, automated: true, passing: true, note: "SIN validator with Luhn algorithm active on input boundary." },
+      { id: 7, name: "7. Safeguards", weight: 20, automated: true, passing: false, note: "Unredacted personal data detected in application logging sinks." },
+      { id: 8, name: "8. Openness", weight: 10, automated: false, passing: true, note: "Privacy policy route accessible at /legal/privacy." },
+      { id: 9, name: "9. Individual Access", weight: 10, automated: true, passing: false, note: "DSR export endpoint omits payment and log tables." },
+      { id: 10, name: "10. Challenging Compliance", weight: 10, automated: false, passing: true, note: "Privacy Officer dispute intake webhooks configured." },
+    ];
+
+    // --- Canadian SIN Luhn Algorithm Check ---
+    function isValidCanadianSIN(sinStr) {
+      const clean = sinStr.replace(/[\s-]/g, '');
+      if (clean.length !== 9 || !/^\d+$/.test(clean)) return false;
+      let sum = 0;
+      for (let i = 0; i < 9; i++) {
+        let num = parseInt(clean[i], 10);
+        if (i % 2 !== 0) {
+          num *= 2;
+          if (num > 9) num -= 9;
+        }
+        sum += num;
+      }
+      return sum % 10 === 0;
+    }
+
+    // --- Scanner Engine ---
+    function analyzeCode(code) {
+      const violations = [];
+      const lines = code.split('\n');
+
+      lines.forEach((lineText, idx) => {
+        const lineNum = idx + 1;
+
+        // Rule 7.1: Logging raw SIN or PII (Principle 7 - Safeguards)
+        if (/(logger|console|print|logging)\s*(\.|\().*(sin|email|phone|password|healthCard)/i.test(lineText)) {
+          violations.push({
+            ruleId: "PIPEDA-7-SAFEGUARD-LOG",
+            principle: "Principle 7: Safeguards",
+            principleId: 7,
+            severity: "HIGH",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: "Personal Information leaking into application logs without sanitization.",
+            remediation: "Use maskIdentifier() or sha256 pseudonymization before emitting log events."
+          });
+        }
+
+        // Rule 7.2: Hardcoded Canadian SIN (Principle 7 & 6)
+        const sinMatch = lineText.match(/\b\d{3}[-\s]\d{3}[-\s]\d{3}\b/);
+        if (sinMatch) {
+          const isLuhnValid = isValidCanadianSIN(sinMatch[0]);
+          violations.push({
+            ruleId: "PIPEDA-7-RAW-SIN",
+            principle: "Principle 7: Safeguards (SIN)",
+            principleId: 7,
+            severity: "CRITICAL",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: `Hardcoded Canadian Social Insurance Number (SIN: ${sinMatch[0]}) detected.${isLuhnValid ? ' [Luhn Check Passed: Valid SIN]' : ''}`,
+            remediation: "Never hardcode real or valid test SINs. Store in dedicated vault with encryption-at-rest."
+          });
+        }
+
+        // Rule 3.1: Unconsented Analytics / Ad Tracking (Principle 3 - Consent)
+        if (/optInConfirmed:\s*false/i.test(lineText) || /trackThirdPartyAdConversion/i.test(lineText) && !code.includes('hasConsentFor')) {
+          if (/optInConfirmed:\s*false/i.test(lineText)) {
+            violations.push({
+              ruleId: "PIPEDA-3-OPTIN-MISSING",
+              principle: "Principle 3: Consent",
+              principleId: 3,
+              severity: "HIGH",
+              line: lineNum,
+              lineText: lineText.trim(),
+              message: "Outbound tracking fired with unverified or false user opt-in.",
+              remediation: "Enclose tracking call in conditional consent guard: `if (hasConsentFor(...))`."
+            });
+          }
+        }
+
+        // Rule 4.1: Excessive / Inappropriate PII Collection (Principle 4 - Limiting Collection)
+        if (/healthCardNumber/i.test(lineText) && !code.includes('health_provider_scope')) {
+          violations.push({
+            ruleId: "PIPEDA-4-OVER-COLLECTION",
+            principle: "Principle 4: Limiting Collection",
+            principleId: 4,
+            severity: "HIGH",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: "Sensitive Provincial Health Identifier collected without clear statutory exception under PIPEDA.",
+            remediation: "Remove health identifier from standard retail / auth registration payloads."
+          });
+        }
+
+        // Rule 4.2 / 2.1: Schema field missing purpose tag (Principle 2 & 4)
+        if (lineText.includes('canadianSIN') && !lineText.includes('@privacy(purpose:')) {
+          violations.push({
+            ruleId: "PIPEDA-2-PURPOSE-UNTAGGED",
+            principle: "Principle 2: Identifying Purposes",
+            principleId: 2,
+            severity: "MEDIUM",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: "Database column storing sensitive identifier lacks lawful purpose annotation.",
+            remediation: "Add @privacy(purpose: 'tax_reporting', retention: '7y') attribute."
+          });
+        }
+
+        // Rule 5.1: Missing automated retention / TTL in schema (Principle 5)
+        if (lineText.includes('model UserAccount') && !code.includes('@privacy(autoPurge') && !code.includes('expiresAt')) {
+          violations.push({
+            ruleId: "PIPEDA-5-RETENTION-DISPOSAL",
+            principle: "Principle 5: Retention & Disposal",
+            principleId: 5,
+            severity: "MEDIUM",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: "Account model stores permanent user records without declared retention lifespan or deletion schedule.",
+            remediation: "Define an expiration hook or TTL column: `expiresAt DateTime? @privacy(autoPurge: true)`."
+          });
+        }
+
+        // Rule 9.1: Incomplete DSR User Export (Principle 9 - Individual Access)
+        if (lineText.includes('generateUserArchive') && !code.includes('transactions') && !code.includes('accessLogs')) {
+          violations.push({
+            ruleId: "PIPEDA-9-INCOMPLETE-DSR",
+            principle: "Principle 9: Individual Access",
+            principleId: 9,
+            severity: "MEDIUM",
+            line: lineNum,
+            lineText: lineText.trim(),
+            message: "Data Subject Access Request (DSAR) export omits financial and telemetry tables.",
+            remediation: "Update export handler to bundle billing, consent history, and audit log records."
+          });
+        }
+      });
+
+      return violations;
+    }
+
+    // --- Update UI based on code & violations ---
+    function runPipedactAudit() {
+      const code = document.getElementById('code-input').value;
+      currentViolations = analyzeCode(code);
+      renderViolationsList(currentViolations);
+      updateLineCount(code);
+      syncDossierWithViolations();
+      showToast(
+        currentViolations.length === 0 ? 'success' : 'warning',
+        currentViolations.length === 0 ? 'Clean Codebase!' : `${currentViolations.length} PIPEDA Issues Flagged`,
+        currentViolations.length === 0 ? 'All 10 principles verified for current file.' : 'Review diagnostic violations panel on the right.'
+      );
+    }
+
+    function handleCodeChange() {
+      const code = document.getElementById('code-input').value;
+      currentViolations = analyzeCode(code);
+      renderViolationsList(currentViolations);
+      updateLineCount(code);
+      syncDossierWithViolations();
+    }
+
+    function updateLineCount(code) {
+      const lineCount = code.split('\n').length;
+      document.getElementById('code-length-indicator').textContent = `${lineCount} lines | ${code.length} chars`;
+    }
+
+    function renderViolationsList(violations) {
+      const container = document.getElementById('violations-list');
+      const badge = document.getElementById('findings-count-badge');
+      const summaryText = document.getElementById('summary-badge-text');
+      const ciStatus = document.getElementById('simulated-ci-status');
+
+      if (violations.length === 0) {
+        badge.className = "px-2 py-0.5 text-xs font-mono font-semibold bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30";
+        badge.textContent = "0 Violations (PASS)";
+        summaryText.textContent = "No PIPEDA Violations Detected";
+        ciStatus.textContent = "PASS (Exit 0)";
+        ciStatus.className = "font-mono font-bold text-emerald-400";
+
+        container.innerHTML = `
+          <div class="h-64 flex flex-col items-center justify-center text-center p-6 border border-dashed border-emerald-800/40 bg-emerald-950/10 rounded-xl">
+            <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-3">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <h4 class="font-semibold text-sm text-emerald-300">Clean PIPEDA Audit</h4>
+            <p class="text-xs text-slate-400 mt-1 max-w-xs">No unredacted SINs, unconsented telemetry, or unbounded retention policies found.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const hasCritical = violations.some(v => v.severity === 'CRITICAL' || v.severity === 'HIGH');
+      badge.className = "px-2 py-0.5 text-xs font-mono font-semibold bg-rose-500/20 text-rose-300 rounded-full border border-rose-500/30";
+      badge.textContent = `${violations.length} Violation${violations.length > 1 ? 's' : ''}`;
+      summaryText.textContent = `${violations.length} PIPEDA Issue${violations.length > 1 ? 's' : ''} Flagged`;
+      ciStatus.textContent = "FAIL (Exit 1)";
+      ciStatus.className = "font-mono font-bold text-rose-400";
+
+      container.innerHTML = violations.map((v, i) => {
+        let badgeColor = "bg-rose-500/20 text-rose-400 border-rose-500/30";
+        if (v.severity === 'MEDIUM') badgeColor = "bg-amber-500/20 text-amber-400 border-amber-500/30";
+        if (v.severity === 'LOW') badgeColor = "bg-blue-500/20 text-blue-400 border-blue-500/30";
+
+        return `
+          <div class="p-3.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 transition">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <span class="text-xs font-mono font-bold text-slate-200 flex items-center gap-1.5">
+                <span class="text-slate-500">#${i + 1}</span>
+                <span>${v.principle}</span>
+              </span>
+              <div class="flex items-center gap-1.5">
+                <span class="px-1.5 py-0.5 text-[10px] font-mono rounded border ${badgeColor}">${v.severity}</span>
+                <span class="text-[11px] font-mono text-slate-400">Line ${v.line}</span>
+              </div>
+            </div>
+            <p class="text-xs text-slate-300 mt-1">${v.message}</p>
+            <div class="mt-2 text-[11px] font-mono bg-slate-900 text-slate-400 p-2 rounded border border-slate-800/80 break-all">
+              <span class="text-rose-400 font-bold">&gt;</span> ${escapeHtml(v.lineText)}
+            </div>
+            <div class="mt-2 text-[11px] text-emerald-400/90 flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Remedy: ${v.remediation}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- Auto-Redact & Patch ---
+    function runAutoRedaction() {
+      const preset = PRESETS[currentPreset];
+      if (preset && preset.fixedCode) {
+        document.getElementById('code-input').value = preset.fixedCode;
+        isAutoFixed = true;
+        runPipedactAudit();
+        showToast('success', 'Codebase Patched!', 'Applied safe redactions, consent gates, and purpose annotations.');
+      }
+    }
+
+    // --- Load Preset ---
+    function loadPreset(key) {
+      currentPreset = key;
+      isAutoFixed = false;
+      const preset = PRESETS[key];
+      if (!preset) return;
+
+      document.getElementById('code-input').value = preset.code;
+      document.getElementById('editor-filename').textContent = preset.filename;
+
+      // Update button styling
+      document.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white');
+        btn.classList.add('text-slate-400');
+      });
+      event.target.classList.add('bg-slate-800', 'text-white');
+      event.target.classList.remove('text-slate-400');
+
+      runPipedactAudit();
+    }
+
+    // --- Dossier Calculation & Synchronization ---
+    function syncDossierWithViolations() {
+      const flaggedPrincipleIds = new Set(currentViolations.map(v => v.principleId));
+      
+      OPC_PRINCIPLES.forEach(p => {
+        if (p.automated) {
+          p.passing = !flaggedPrincipleIds.has(p.id);
+        }
+      });
+
+      renderPrinciplesGrid();
+      calculateComplianceScore();
+    }
+
+    function calculateComplianceScore() {
+      let earned = 0;
+      let total = 0;
+
+      OPC_PRINCIPLES.forEach(p => {
+        total += p.weight;
+        if (p.passing) {
+          earned += p.weight;
+        }
+      });
+
+      const scorePercent = Math.round((earned / total) * 100);
+      document.getElementById('hero-score-val').textContent = scorePercent;
+      document.getElementById('nav-score-badge').textContent = `${scorePercent}%`;
+
+      const labelEl = document.getElementById('hero-score-label');
+      if (scorePercent >= 90) {
+        labelEl.textContent = "Compliant (Audit Ready)";
+        labelEl.className = "text-[10px] text-emerald-400 font-medium block mt-1";
+      } else if (scorePercent >= 70) {
+        labelEl.textContent = "Substantial Compliance (Action Needed)";
+        labelEl.className = "text-[10px] text-amber-400 font-medium block mt-1";
+      } else {
+        labelEl.textContent = "High Legal Risk (Non-Compliant)";
+        labelEl.className = "text-[10px] text-rose-400 font-medium block mt-1";
+      }
+    }
+
+    function togglePrincipleManual(principleId) {
+      const item = OPC_PRINCIPLES.find(p => p.id === principleId);
+      if (item) {
+        item.passing = !item.passing;
+        calculateComplianceScore();
+        renderPrinciplesGrid();
+        showToast('info', 'Policy Updated', `${item.name} state manually toggled.`);
+      }
+    }
+
+    function renderPrinciplesGrid() {
+      const container = document.getElementById('principles-card-grid');
+      container.innerHTML = OPC_PRINCIPLES.map(p => {
+        const isPass = p.passing;
+        const statusBadge = isPass 
+          ? `<span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 rounded border border-emerald-500/30">PASS</span>`
+          : `<span class="px-2 py-0.5 text-[10px] font-mono font-bold bg-rose-500/20 text-rose-300 rounded border border-rose-500/30">ACTION REQUIRED</span>`;
+
+        return `
+          <div class="bg-slate-900 border ${isPass ? 'border-slate-800' : 'border-rose-900/50'} rounded-xl p-4 flex flex-col justify-between shadow-lg hover:border-slate-700 transition">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-mono font-bold text-slate-300">${p.name}</span>
+                ${statusBadge}
+              </div>
+              <p class="text-xs text-slate-400 leading-relaxed">${p.note}</p>
+            </div>
+            
+            <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+              <span class="text-slate-500">Weight: ${p.weight}% • ${p.automated ? 'Code-verified' : 'Organizational'}</span>
+              <button onclick="togglePrincipleManual(${p.id})" class="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium">
+                Toggle Status
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- Tab Switching ---
+    function switchTab(tabId) {
+      ['scanner', 'dossier', 'cicd', 'rules'].forEach(id => {
+        const viewEl = document.getElementById(`view-${id}`);
+        const btnEl = document.getElementById(`tab-btn-${id}`);
+        if (id === tabId) {
+          viewEl.classList.remove('hidden');
+          btnEl.className = "px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 bg-brand-600 text-white shadow-sm";
+        } else {
+          viewEl.classList.add('hidden');
+          btnEl.className = "px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-2 text-slate-400 hover:text-slate-200";
+        }
+      });
+    }
+
+    // --- CI/CD Terminal Simulator ---
+    function runCliSimulate(withFix = false) {
+      const term = document.getElementById('terminal-body');
+      const exitEl = document.getElementById('cli-terminal-exitcode');
+      const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+      
+      term.innerHTML = `<p class="text-slate-500">[${timestamp}] $ pipedact check ./src --strict ${withFix ? '--fix' : ''}</p>`;
+      
+      setTimeout(() => {
+        term.innerHTML += `<p class="text-slate-400">[info] Loaded configuration from .pipedactrc.yaml</p>`;
+        term.innerHTML += `<p class="text-slate-400">[info] Parsing 12 source files with Tree-sitter AST & Luhn engines...</p>`;
+      }, 200);
+
+      setTimeout(() => {
+        if (withFix) {
+          term.innerHTML += `<p class="text-emerald-400">[remediation] Automatically masked 2 PII log sinks in register.controller.ts</p>`;
+          term.innerHTML += `<p class="text-emerald-400">[remediation] Wrapped 1 ad-tracker in affirmative consent guard</p>`;
+          term.innerHTML += `<p class="text-emerald-400 font-bold mt-2">[SUCCESS] All PIPEDA Schedule 1 automated gates passed. 0 blocking issues.</p>`;
+          term.innerHTML += `<p class="text-slate-500">Process completed with exit code 0.</p>`;
+          exitEl.textContent = "Exit: 0 (PASS)";
+          exitEl.className = "text-emerald-400 font-mono";
+        } else {
+          term.innerHTML += `<p class="text-rose-400 font-bold mt-1">[FAIL] PIPEDA Schedule 1 Violations Found (3 blocking errors):</p>`;
+          term.innerHTML += `<p class="text-slate-300">  • [HIGH] Principle 7 (Safeguards): Log sink receives Canadian SIN & phone at register.controller.ts:10</p>`;
+          term.innerHTML += `<p class="text-slate-300">  • [HIGH] Principle 3 (Consent): Marketing call unconditioned on consent at register.controller.ts:16</p>`;
+          term.innerHTML += `<p class="text-slate-300">  • [MED]  Principle 4 (Collection): Health card stored for standard account at register.controller.ts:25</p>`;
+          term.innerHTML += `<p class="text-rose-400 font-bold mt-2">[ERROR] Strict CI gate failed. Aborting deployment pipeline.</p>`;
+          term.innerHTML += `<p class="text-slate-500">Process completed with exit code 1.</p>`;
+          exitEl.textContent = "Exit: 1 (FAIL)";
+          exitEl.className = "text-rose-400 font-mono";
+        }
+        term.scrollTop = term.scrollHeight;
+      }, 500);
+    }
+
+    // --- Export Dossier (Markdown / SARIF / JSON) ---
+    function exportDossier(format) {
+      let content = "";
+      let filename = "";
+      let mimeType = "text/plain";
+
+      if (format === 'markdown') {
+        filename = "PIPEDA_OPC_SELF_ASSESSMENT_DOSSIER.md";
+        content = `# OPC PIPEDA Schedule 1 Self-Assessment Compliance Dossier
+Generated by: pipedact v1.2.0
+Date: ${new Date().toLocaleDateString('en-CA')}
+Jurisdiction: Federal Canada (PIPEDA / Bill C-27 Alignment)
+
+## Executive Summary
+- **Overall Compliance Score:** ${document.getElementById('hero-score-val').textContent}%
+- **Status:** ${document.getElementById('hero-score-label').textContent}
+- **Active Code Violations:** ${currentViolations.length}
+
+## 10 Fair Information Principles Audit Breakdown
+${OPC_PRINCIPLES.map(p => `### Principle ${p.id}: ${p.name}
+- **Status:** ${p.passing ? 'PASS / COMPLIANT' : 'ACTION REQUIRED'}
+- **Verification Mode:** ${p.automated ? 'Automated AST & Static Analysis' : 'Organizational Policy'}
+- **Notes:** ${p.note}
+`).join('\n')}
+
+## Code Findings & Remediations
+${currentViolations.length === 0 ? "No active source code violations detected." : currentViolations.map((v, i) => `#### Violation ${i + 1}: ${v.ruleId}
+- **Principle:** ${v.principle}
+- **Severity:** ${v.severity}
+- **Line:** ${v.line}
+- **Snippet:** \`${v.lineText}\`
+- **Remediation Action:** ${v.remediation}
+`).join('\n')}
+`;
+      } else if (format === 'sarif') {
+        filename = "pipedact-results.sarif";
+        mimeType = "application/json";
+        const sarifData = {
+          $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+          version: "2.1.0",
+          runs: [{
+            tool: {
+              driver: {
+                name: "pipedact",
+                version: "1.2.0",
+                informationUri: "https://github.com/pipedact/pipedact"
+              }
+            },
+            results: currentViolations.map(v => ({
+              ruleId: v.ruleId,
+              level: v.severity === 'CRITICAL' || v.severity === 'HIGH' ? 'error' : 'warning',
+              message: { text: v.message },
+              locations: [{
+                physicalLocation: {
+                  artifactLocation: { uri: document.getElementById('editor-filename').textContent },
+                  region: { startLine: v.line }
+                }
+              }]
+            }))
+          }]
+        };
+        content = JSON.stringify(sarifData, null, 2);
+      }
+
+      // Trigger standard browser download
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('success', 'Export Complete', `Saved ${filename} to your device.`);
+    }
+
+    // --- Helper Copy Functions ---
+    function copyCode() {
+      const code = document.getElementById('code-input').value;
+      fallbackCopy(code, 'Code snippet copied to clipboard');
+    }
+
+    function copyPipedactYaml() {
+      const yaml = document.getElementById('yaml-config-input').value;
+      fallbackCopy(yaml, '.pipedactrc.yaml copied');
+    }
+
+    function copyGithubWorkflow() {
+      const yaml = `name: PIPEDA Compliance Gate
+on: [push, pull_request]
+
+jobs:
+  privacy-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pipedact
+        run: curl -sSL https://get.pipedact.dev | sh
+      - name: Run Privacy Linter
+        run: pipedact check ./src --strict --format sarif --out audit.sarif
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: audit.sarif`;
+      fallbackCopy(yaml, 'GitHub Actions workflow copied');
+    }
+
+    function fallbackCopy(text, successMsg) {
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      try {
+        document.execCommand('copy');
+        showToast('info', 'Copied!', successMsg);
+      } catch (err) {
+        showToast('error', 'Clipboard Error', 'Could not copy to clipboard.');
+      }
+      document.body.removeChild(temp);
+    }
+
+    // --- Toast Notifications ---
+    function showToast(type, title, message) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let border = "border-brand-500/50 bg-slate-900";
+      let icon = "text-indigo-400";
+      if (type === 'success') {
+        border = "border-emerald-500/50 bg-slate-900";
+        icon = "text-emerald-400";
+      } else if (type === 'warning') {
+        border = "border-amber-500/50 bg-slate-900";
+        icon = "text-amber-400";
+      } else if (type === 'error') {
+        border = "border-rose-500/50 bg-slate-900";
+        icon = "text-rose-400";
+      }
+
+      toast.className = `p-3 rounded-xl border ${border} shadow-2xl flex items-start gap-3 w-80 text-xs transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto`;
+      toast.innerHTML = `
+        <div class="mt-0.5 ${icon}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="flex-1">
+          <p class="font-semibold text-slate-200">${title}</p>
+          <p class="text-slate-400 mt-0.5">${message}</p>
+        </div>
+      `;
+
+      container.appendChild(toast);
+      
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function escapeHtml(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // --- On Load Initialization ---
+    window.onload = function () {
+      loadPreset('ts_backend');
+      renderPrinciplesGrid();
+      calculateComplianceScore();
+    };
+  </script>
+</body>
+</html>
