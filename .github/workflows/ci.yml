@@ -27,7 +27,7 @@ jobs:
         run: go test -v -race ./...
 
       - name: Build binary
-        run: go build -v -o bin/pipedact cmd/pipedact/main.go
+        run: go build -v -o bin/pipedact ./cmd/pipedact
 
       - name: Verify CLI commands
         run: |
