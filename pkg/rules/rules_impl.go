@@ -217,7 +217,7 @@ func (r *RuleConsentOptIn) Frameworks() map[core.Framework]string {
 }
 
 var optInFalseRegex = regexp.MustCompile(`(?i)optInConfirmed\s*:\s*false`)
-var thirdPartyAdRegex = regexp.MustCompile(`(?i)(trackThirdPartyAdConversion|sendMarketingTelemetry|trackAdConversion)`)
+var thirdPartyAdRegex = regexp.MustCompile(`(?i)(trackThirdPartyAdConversion|sendMarketingTelemetry|trackAdConversion)\s*\(`)
 
 func isGuardedByConsentLocally(ctx *core.FileContext, targetIdx int) bool {
 	start := targetIdx - 15
@@ -266,6 +266,9 @@ func (r *RuleConsentOptIn) Inspect(ctx *core.FileContext, cfg *config.Config) []
 				FrameworkMappings: r.Frameworks(),
 			})
 		} else if thirdPartyAdRegex.MatchString(code) {
+			if strings.Contains(code, "function ") || strings.Contains(code, "def ") {
+				continue
+			}
 			if !isGuardedByConsentLocally(ctx, i) {
 				violations = append(violations, core.Violation{
 					RuleID:            r.ID(),
