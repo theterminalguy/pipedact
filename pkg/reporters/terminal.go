@@ -85,3 +85,25 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		red.Fprintf(w, "FAIL (Exit 1)\n\n")
 	}
 }
+
+// PrintAIAnalysis outputs the AI-synthesized semantic privacy audit to the terminal.
+func PrintAIAnalysis(w io.Writer, providerUsed, summary string, risksCount int) {
+	if w == nil {
+		w = os.Stdout
+	}
+
+	magenta := color.New(color.FgMagenta, color.Bold)
+	cyan := color.New(color.FgCyan, color.Bold)
+	gray := color.New(color.FgHiBlack)
+
+	fmt.Fprintf(w, "─────────────────────────────────────────────────────────────────────────────\n")
+	magenta.Fprintf(w, "🤖 AI Privacy Intelligence & Semantic Reasoning")
+	gray.Fprintf(w, " (Engine: %s)\n\n", providerUsed)
+
+	fmt.Fprintf(w, "%s\n\n", summary)
+
+	if risksCount > 0 {
+		cyan.Fprintf(w, "💡 Recommendation: ")
+		fmt.Fprintf(w, "Review flagged architectural risks above or run 'pipedact check --fix' to apply safe patches.\n\n")
+	}
+}

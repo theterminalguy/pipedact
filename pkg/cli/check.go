@@ -7,6 +7,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/theterminalguy/pipedact/pkg/ai"
 	"github.com/theterminalguy/pipedact/pkg/config"
 	"github.com/theterminalguy/pipedact/pkg/core"
 	"github.com/theterminalguy/pipedact/pkg/fix"
@@ -16,11 +17,13 @@ import (
 
 func newCheckCmd() *cobra.Command {
 	var (
-		strict   bool
-		failOn   string
-		format   string
-		outFile  string
-		applyFix bool
+		strict     bool
+		failOn     string
+		format     string
+		outFile    string
+		applyFix   bool
+		enableAI   bool
+		aiProvider string
 	)
 
 	cmd := &cobra.Command{
@@ -73,6 +76,13 @@ the 10 Fair Information Principles in PIPEDA Schedule 1.`,
 				}
 			}
 
+			// Optional AI semantic privacy reasoning
+			var aiRes *ai.AnalysisResponse
+			if enableAI {
+				prov := ai.ResolveProvider(aiProvider)
+				aiRes, _ = ai.RunAIAnalysis(cmd.Context(), result, prov)
+			}
+
 			// Format and output results
 			var outputBytes []byte
 			switch strings.ToLower(format) {
@@ -94,9 +104,15 @@ the 10 Fair Information Principles in PIPEDA Schedule 1.`,
 				// Default text format to terminal
 				if outFile == "" {
 					reporters.PrintTerminal(os.Stdout, result, strict)
+					if aiRes != nil {
+						reporters.PrintAIAnalysis(os.Stdout, aiRes.ProviderUsed, aiRes.ExecutiveSummary, len(aiRes.SemanticRisks))
+					}
 				} else {
 					var sb strings.Builder
 					reporters.PrintTerminal(&sb, result, strict)
+					if aiRes != nil {
+						reporters.PrintAIAnalysis(&sb, aiRes.ProviderUsed, aiRes.ExecutiveSummary, len(aiRes.SemanticRisks))
+					}
 					outputBytes = []byte(sb.String())
 				}
 			}
@@ -138,6 +154,8 @@ the 10 Fair Information Principles in PIPEDA Schedule 1.`,
 	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text, sarif, json, markdown, html")
 	cmd.Flags().StringVarP(&outFile, "out", "o", "", "Output file path (default stdout)")
 	cmd.Flags().BoolVar(&applyFix, "fix", false, "Automatically remediate detected violations where safe")
+	cmd.Flags().BoolVar(&enableAI, "ai", false, "Enable AI semantic privacy analysis (Gemini, OpenAI, Ollama, Heuristic)")
+	cmd.Flags().StringVar(&aiProvider, "ai-provider", "auto", "AI provider to use (auto, gemini, openai, ollama, heuristic)")
 
 	return cmd
 }

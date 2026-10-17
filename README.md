@@ -47,12 +47,31 @@ pipedact check ./src --strict
 # Run with automated remediation
 pipedact check ./src --fix
 
+# Run with AI semantic privacy analysis (Gemini, OpenAI, Ollama, or built-in statutory reasoner)
+pipedact check ./src --ai
+
+# Explain a specific rule with legal mandate, OPC precedents & compliant refactoring
+pipedact explain PIPEDA-7-SAFEGUARD-LOG
+
 # Export full OPC Schedule 1 Compliance Dossier
 pipedact dossier --format markdown --out PIPEDA_OPC_SELF_ASSESSMENT_DOSSIER.md
 
 # Validate Canadian SIN
 pipedact validate-sin "046-454-286"
 ```
+
+### 🧪 Sample Code Repository
+
+Want to see pipedact in action on a real codebase? Check out the companion sample app:
+👉 **[github.com/theterminalguy/pipedact-sample-app](https://github.com/theterminalguy/pipedact-sample-app)**
+
+---
+
+## 🤖 Hybrid Static + AI Analysis Architecture
+
+`pipedact` uniquely combines **ultra-fast static analysis** (<1ms) with **semantic AI privacy intelligence**:
+- **Zero-Egress Statutory Reasoner**: Runs offline by default with built-in Canadian statutory knowledge and OPC investigation precedents (no API keys required).
+- **Generative AI Providers**: Supports Google Gemini (`GEMINI_API_KEY`), OpenAI (`OPENAI_API_KEY`), and local Ollama (`OLLAMA_HOST`) for deep semantic audits, quasi-identifier linkage analysis, and custom refactoring suggestions.
 
 ---
 

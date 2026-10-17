@@ -36,4 +36,5 @@ func init() {
 	rootCmd.AddCommand(newValidateSINCmd())
 	rootCmd.AddCommand(newPrinciplesCmd())
 	rootCmd.AddCommand(newServeCmd())
+	rootCmd.AddCommand(newExplainCmd())
 }
