@@ -2,6 +2,7 @@ package reporters
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/theterminalguy/pipedact/pkg/core"
 )
@@ -13,8 +14,9 @@ type sarifReport struct {
 }
 
 type sarifRun struct {
-	Tool    sarifTool     `json:"tool"`
-	Results []sarifResult `json:"results"`
+	Tool        sarifTool         `json:"tool"`
+	Invocations []sarifInvocation `json:"invocations,omitempty"`
+	Results     []sarifResult     `json:"results"`
 }
 
 type sarifTool struct {
@@ -25,6 +27,16 @@ type sarifDriver struct {
 	Name           string `json:"name"`
 	Version        string `json:"version"`
 	InformationURI string `json:"informationUri"`
+}
+
+type sarifInvocation struct {
+	ExecutionSuccessful        bool                `json:"executionSuccessful"`
+	ToolExecutionNotifications []sarifNotification `json:"toolExecutionNotifications,omitempty"`
+}
+
+type sarifNotification struct {
+	Message sarifMessage `json:"message"`
+	Level   string       `json:"level"`
 }
 
 type sarifResult struct {
@@ -86,6 +98,23 @@ func GenerateSARIF(result *core.AuditResult) ([]byte, error) {
 		})
 	}
 
+	var notifications []sarifNotification
+	for _, f := range result.FailedFiles {
+		notifications = append(notifications, sarifNotification{
+			Level: "error",
+			Message: sarifMessage{
+				Text: fmt.Sprintf("Failed to read %s: %s", f.Path, f.Error),
+			},
+		})
+	}
+
+	invocations := []sarifInvocation{
+		{
+			ExecutionSuccessful:        result.IsComplete,
+			ToolExecutionNotifications: notifications,
+		},
+	}
+
 	report := sarifReport{
 		Schema:  "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
 		Version: "2.1.0",
@@ -98,7 +127,8 @@ func GenerateSARIF(result *core.AuditResult) ([]byte, error) {
 						InformationURI: "https://github.com/theterminalguy/pipedact",
 					},
 				},
-				Results: sarifResults,
+				Invocations: invocations,
+				Results:     sarifResults,
 			},
 		},
 	}

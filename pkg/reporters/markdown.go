@@ -22,11 +22,30 @@ func GenerateMarkdownDossier(result *core.AuditResult) string {
 	sb.WriteString(fmt.Sprintf("Date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("Jurisdiction: **Canada Federal (PIPEDA Schedule 1)**\n\n")
 
+	completeness := "Complete (All discovered eligible files scanned)"
+	if !result.IsComplete {
+		completeness = fmt.Sprintf("⚠️ Incomplete (%d file(s) unreadable or failed)", len(result.FailedFiles))
+	}
+
 	sb.WriteString("## Executive Summary\n")
+	sb.WriteString(fmt.Sprintf("- **Scan Completeness:** %s\n", completeness))
 	sb.WriteString(fmt.Sprintf("- **Overall Compliance Score:** %d%%\n", result.ComplianceScore))
 	sb.WriteString(fmt.Sprintf("- **Readiness Status:** %s\n", result.ScoreLabel))
+	sb.WriteString(fmt.Sprintf("- **Files Discovered:** %d\n", result.DiscoveredFiles))
 	sb.WriteString(fmt.Sprintf("- **Files Scanned:** %d (%d lines)\n", result.ScannedFiles, result.ScannedLines))
+	sb.WriteString(fmt.Sprintf("- **Files Skipped:** %d\n", len(result.SkippedFiles)))
+	sb.WriteString(fmt.Sprintf("- **Files Failed:** %d\n", len(result.FailedFiles)))
 	sb.WriteString(fmt.Sprintf("- **Active Code Violations:** %d\n\n", len(result.Violations)))
+
+	if len(result.FailedFiles) > 0 {
+		sb.WriteString("### Failed Files\n\n")
+		sb.WriteString("| File | Error Reason |\n")
+		sb.WriteString("|---|---|\n")
+		for _, f := range result.FailedFiles {
+			sb.WriteString(fmt.Sprintf("| `%s` | %s |\n", f.Path, f.Error))
+		}
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString("## 10 Fair Information Principles Audit Breakdown\n")
 
@@ -71,6 +90,9 @@ func GenerateMarkdownDossier(result *core.AuditResult) string {
 			sb.WriteString(fmt.Sprintf("#### Finding %d: %s\n", i+1, v.RuleID))
 			sb.WriteString(fmt.Sprintf("- **Principle:** %s\n", v.Principle))
 			sb.WriteString(fmt.Sprintf("- **Severity:** `%s`\n", v.Severity))
+			if v.Confidence != "" {
+				sb.WriteString(fmt.Sprintf("- **Confidence:** `%s`\n", v.Confidence))
+			}
 			sb.WriteString(fmt.Sprintf("- **Location:** `%s:%d`\n", v.FilePath, v.Line))
 			sb.WriteString(fmt.Sprintf("- **Violation Details:** %s\n", v.Message))
 			if len(v.FrameworkMappings) > 0 {
@@ -101,11 +123,30 @@ func generateSOC2MarkdownDossier(result *core.AuditResult) string {
 	sb.WriteString(fmt.Sprintf("Date: %s\n", time.Now().Format("2006-01-02")))
 	sb.WriteString("Assessment Scope: **Security (Common Criteria CC6/CC7) & Privacy Trust Services Criteria (P1-P5)**\n\n")
 
+	completeness := "Complete (All discovered eligible files scanned)"
+	if !result.IsComplete {
+		completeness = fmt.Sprintf("⚠️ Incomplete (%d file(s) unreadable or failed)", len(result.FailedFiles))
+	}
+
 	sb.WriteString("## Executive Summary\n")
+	sb.WriteString(fmt.Sprintf("- **Scan Completeness:** %s\n", completeness))
 	sb.WriteString(fmt.Sprintf("- **Technical Readiness Score:** %d%%\n", result.ComplianceScore))
 	sb.WriteString(fmt.Sprintf("- **Assessment Status:** %s\n", result.ScoreLabel))
+	sb.WriteString(fmt.Sprintf("- **Files Discovered:** %d\n", result.DiscoveredFiles))
 	sb.WriteString(fmt.Sprintf("- **Files Scanned:** %d (%d lines)\n", result.ScannedFiles, result.ScannedLines))
+	sb.WriteString(fmt.Sprintf("- **Files Skipped:** %d\n", len(result.SkippedFiles)))
+	sb.WriteString(fmt.Sprintf("- **Files Failed:** %d\n", len(result.FailedFiles)))
 	sb.WriteString(fmt.Sprintf("- **Active Technical Exceptions:** %d\n\n", len(result.Violations)))
+
+	if len(result.FailedFiles) > 0 {
+		sb.WriteString("### Failed Files\n\n")
+		sb.WriteString("| File | Error Reason |\n")
+		sb.WriteString("|---|---|\n")
+		for _, f := range result.FailedFiles {
+			sb.WriteString(fmt.Sprintf("| `%s` | %s |\n", f.Path, f.Error))
+		}
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString("## Trust Services Criteria Breakdown\n\n")
 	sb.WriteString("| Criteria ID | Category | Name | Weight | Status | Exceptions |\n")
@@ -132,6 +173,9 @@ func generateSOC2MarkdownDossier(result *core.AuditResult) string {
 			sb.WriteString(fmt.Sprintf("#### Exception %d: %s\n", i+1, v.RuleID))
 			sb.WriteString(fmt.Sprintf("- **Control Principle:** %s\n", v.Principle))
 			sb.WriteString(fmt.Sprintf("- **Risk Severity:** `%s`\n", v.Severity))
+			if v.Confidence != "" {
+				sb.WriteString(fmt.Sprintf("- **Confidence:** `%s`\n", v.Confidence))
+			}
 			sb.WriteString(fmt.Sprintf("- **Artifact Location:** `%s:%d`\n", v.FilePath, v.Line))
 			sb.WriteString(fmt.Sprintf("- **Deficiency Description:** %s\n", v.Message))
 			if len(v.FrameworkMappings) > 0 {

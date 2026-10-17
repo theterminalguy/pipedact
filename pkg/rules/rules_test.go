@@ -284,3 +284,78 @@ async function sendEvent(email: string) {
 		t.Fatalf("expected violation when consent check is far away outside enclosing block, got none")
 	}
 }
+
+func TestRuleConsentOptIn_CommentGuard(t *testing.T) {
+	// Consent guard is commented out with //
+	code := `
+async function sendEvent(email: string) {
+  // if (hasConsentFor('marketing')) {
+  await trackThirdPartyAdConversion({ customerEmail: email });
+  // }
+}
+`
+	ctx := core.NewFileContext("/src/tracker.ts", "src/tracker.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleConsentOptIn{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation when consent guard is in comment, got none")
+	}
+	if violations[0].Confidence != core.ConfidenceHigh {
+		t.Errorf("expected ConfidenceHigh, got %s", violations[0].Confidence)
+	}
+}
+
+func TestRuleTrackingInComment_NoViolation(t *testing.T) {
+	code := `
+// Example:
+// await trackThirdPartyAdConversion({ customerEmail: 'test@example.com' });
+function realCode() {
+  return true;
+}
+`
+	ctx := core.NewFileContext("/src/tracker.ts", "src/tracker.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleConsentOptIn{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations for tracking call in comment, got %d", len(violations))
+	}
+}
+
+func TestRuleHardcodedSecret_CommentNoViolation(t *testing.T) {
+	code := `
+// const apiKey = "sk_live_abcdef1234567890";
+// Example key: AKIAIOSFODNN7EXAMPLE
+function realCode() {
+  return true;
+}
+`
+	ctx := core.NewFileContext("/src/auth.ts", "src/auth.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleHardcodedSecret{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations for secret in comment, got %d", len(violations))
+	}
+}
+
+func TestRuleInsecureCookie_CommentNoViolation(t *testing.T) {
+	code := `
+// res.cookie('session', 'xyz', { secure: false });
+function realCode() {
+  return true;
+}
+`
+	ctx := core.NewFileContext("/src/server.ts", "src/server.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleInsecureCookie{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) != 0 {
+		t.Fatalf("expected 0 violations for cookie in comment, got %d", len(violations))
+	}
+}

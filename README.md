@@ -240,16 +240,20 @@ pipedact explain PIPEDA-7-SAFEGUARD-LOG
 
 ---
 
-## 9. Automated Remediation (`--fix`)
+## 9. Automated Remediation (`--fix` and `--dry-run`)
 
 Pipedact includes a conservative automated patcher:
 
 ```bash
+# Preview diff without modifying files
+pipedact check ./src --dry-run
+
+# Apply safe fixes atomically
 pipedact check ./src --fix
 ```
 
-- **Scope**: Automatically masks PII in simple log statements (e.g., wrapping variables in `maskIdentifier()`) and adds missing conditional opt-in guards.
-- **Safety**: `--fix` never modifies authentication logic, database queries, or authorization middleware.
+- **Scope**: Automatically masks or redacts PII in simple application logging statements (e.g. `PIPEDA-7-SAFEGUARD-LOG`).
+- **Safety**: `--fix` operates with atomic writes and syntax validation. It never fabricates consent decisions (`optInConfirmed: false` -> `true` is strictly prohibited), never modifies authentication logic, and never claims schema comments implement data deletion.
 
 ---
 

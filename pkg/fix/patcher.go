@@ -1,18 +1,26 @@
 package fix
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/theterminalguy/pipedact/pkg/core"
 )
 
+// FixOptions configures patch execution.
+type FixOptions struct {
+	DryRun bool
+}
+
 // FixReport summarizes modifications made by the fixer.
 type FixReport struct {
 	FilePath     string
 	PatchedRules []string
 	Modified     bool
+	Diff         string
 }
 
 // Patcher executes automated code remediation.
@@ -25,6 +33,11 @@ func NewPatcher() *Patcher {
 
 // ApplyFixes applies automated remediations for violations found in a file.
 func (p *Patcher) ApplyFixes(filePath string, violations []core.Violation) (*FixReport, error) {
+	return p.ApplyFixesWithOptions(filePath, violations, FixOptions{DryRun: false})
+}
+
+// ApplyFixesWithOptions applies automated remediations with configurable options such as dry-run preview.
+func (p *Patcher) ApplyFixesWithOptions(filePath string, violations []core.Violation, opts FixOptions) (*FixReport, error) {
 	report := &FixReport{
 		FilePath: filePath,
 	}
@@ -50,27 +63,120 @@ func (p *Patcher) ApplyFixes(filePath string, violations []core.Violation) (*Fix
 
 		switch v.RuleID {
 		case "PIPEDA-7-SAFEGUARD-LOG":
-			content = patchSafeguardLog(content)
-			report.PatchedRules = append(report.PatchedRules, v.RuleID)
-
-		case "PIPEDA-2-PURPOSE-UNTAGGED":
-			content = patchPurposeUntagged(content)
-			report.PatchedRules = append(report.PatchedRules, v.RuleID)
-
-		case "PIPEDA-5-RETENTION-DISPOSAL":
-			content = patchRetentionDisposal(content)
-			report.PatchedRules = append(report.PatchedRules, v.RuleID)
+			newContent := patchSafeguardLog(content)
+			if newContent != content {
+				content = newContent
+				report.PatchedRules = append(report.PatchedRules, v.RuleID)
+			}
 		}
 	}
 
 	if content != original {
+		// Delimiter balance validation: verify code syntax balance before applying
+		if !hasBalancedDelimiters(content) {
+			return report, fmt.Errorf("autofix aborted: resulting transformation creates unbalanced delimiters in %s", filePath)
+		}
+
 		report.Modified = true
-		if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
-			return report, err
+		report.Diff = generateUnifiedDiff(filePath, original, content)
+
+		if !opts.DryRun {
+			if err := atomicWriteFile(filePath, []byte(content), filePerm); err != nil {
+				return report, err
+			}
 		}
 	}
 
 	return report, nil
+}
+
+func hasBalancedDelimiters(content string) bool {
+	parens := 0
+	braces := 0
+	brackets := 0
+
+	for _, r := range content {
+		switch r {
+		case '(':
+			parens++
+		case ')':
+			parens--
+		case '{':
+			braces++
+		case '}':
+			braces--
+		case '[':
+			brackets++
+		case ']':
+			brackets--
+		}
+		if parens < 0 || braces < 0 || brackets < 0 {
+			return false
+		}
+	}
+	return parens == 0 && braces == 0 && brackets == 0
+}
+
+func atomicWriteFile(filePath string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(filePath)
+	tmpFile, err := os.CreateTemp(dir, ".pipedact-patch-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	if err := tmpFile.Chmod(perm); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, filePath)
+}
+
+func generateUnifiedDiff(filePath, original, modified string) string {
+	origLines := strings.Split(original, "\n")
+	modLines := strings.Split(modified, "\n")
+
+	var diff strings.Builder
+	diff.WriteString(fmt.Sprintf("--- %s\toriginal\n", filePath))
+	diff.WriteString(fmt.Sprintf("+++ %s\tmodified\n", filePath))
+
+	// Find changed window
+	origLen := len(origLines)
+	modLen := len(modLines)
+
+	start := 0
+	for start < origLen && start < modLen && origLines[start] == modLines[start] {
+		start++
+	}
+
+	origEnd := origLen - 1
+	modEnd := modLen - 1
+	for origEnd >= start && modEnd >= start && origLines[origEnd] == modLines[modEnd] {
+		origEnd--
+		modEnd--
+	}
+
+	diff.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", start+1, origEnd-start+1, start+1, modEnd-start+1))
+	for i := start; i <= origEnd; i++ {
+		diff.WriteString(fmt.Sprintf("-%s\n", origLines[i]))
+	}
+	for i := start; i <= modEnd; i++ {
+		diff.WriteString(fmt.Sprintf("+%s\n", modLines[i]))
+	}
+
+	return diff.String()
 }
 
 func patchSafeguardLog(content string) string {
@@ -107,29 +213,5 @@ func patchSafeguardLog(content string) string {
 		}
 	}
 
-	return content
-}
-
-func patchPurposeUntagged(content string) string {
-	// Prisma schema: add @privacy tags
-	if strings.Contains(content, "canadianSIN") && !strings.Contains(content, "@privacy") {
-		content = strings.Replace(content, "canadianSIN     String", "canadianSIN     String   @privacy(purpose: \"tax_reporting\", retention: \"7y\")", 1)
-	}
-	if strings.Contains(content, "creditCardToken String") && !strings.Contains(content, "billing_fulfillment") {
-		content = strings.Replace(content, "creditCardToken String", "creditCardToken String    @privacy(purpose: \"billing_fulfillment\", retention: \"transaction_plus_7yr\")", 1)
-	}
-	return content
-}
-
-func patchRetentionDisposal(content string) string {
-	// Prisma schema: add expiresAt TTL hook
-	if strings.Contains(content, "model UserAccount") && !strings.Contains(content, "expiresAt") {
-		content = strings.Replace(
-			content,
-			"createdAt       DateTime @default(now())",
-			"createdAt       DateTime  @default(now())\n  expiresAt       DateTime? @privacy(autoPurge: true) // Schedule 1 Principle 5 compliant disposal",
-			1,
-		)
-	}
 	return content
 }

@@ -22,6 +22,7 @@ func newCheckCmd() *cobra.Command {
 		format     string
 		outFile    string
 		applyFix   bool
+		dryRun     bool
 		enableAI   bool
 		aiProvider string
 		framework  string
@@ -58,8 +59,8 @@ ISO/IEC 27701, and Quebec Law 25.`,
 				return fmt.Errorf("scan failed: %w", err)
 			}
 
-			// Apply automated remediation if --fix flag was provided
-			if applyFix && len(result.Violations) > 0 {
+			// Apply automated remediation if --fix or --dry-run flag was provided
+			if (applyFix || dryRun) && len(result.Violations) > 0 {
 				patcher := fix.NewPatcher()
 				violationsByFile := make(map[string][]core.Violation)
 				for _, v := range result.Violations {
@@ -68,18 +69,23 @@ ISO/IEC 27701, and Quebec Law 25.`,
 
 				totalPatched := 0
 				for filePath, fViolations := range violationsByFile {
-					report, err := patcher.ApplyFixes(filePath, fViolations)
+					report, err := patcher.ApplyFixesWithOptions(filePath, fViolations, fix.FixOptions{DryRun: dryRun})
 					if err != nil {
 						color.New(color.FgYellow).Fprintf(os.Stderr, "[remediation] Warning: failed to apply fixes to %s: %v\n", filePath, err)
 						continue
 					}
 					if report.Modified {
 						totalPatched += len(report.PatchedRules)
-						color.New(color.FgGreen).Printf("[remediation] Automatically patched %d issues in %s\n", len(report.PatchedRules), filePath)
+						if dryRun {
+							color.New(color.FgCyan, color.Bold).Printf("[dry-run] Planned patch for %s:\n", filePath)
+							fmt.Println(report.Diff)
+						} else {
+							color.New(color.FgGreen).Printf("[remediation] Automatically patched %d issues in %s\n", len(report.PatchedRules), filePath)
+						}
 					}
 				}
 
-				if totalPatched > 0 {
+				if !dryRun && totalPatched > 0 {
 					// Re-scan to update violations and score
 					var rescanErr error
 					result, rescanErr = engine.Scan(args)
@@ -146,6 +152,11 @@ ISO/IEC 27701, and Quebec Law 25.`,
 				fmt.Println(string(outputBytes))
 			}
 
+			// Strict mode enforcement on incomplete scans
+			if strict && !result.IsComplete {
+				return fmt.Errorf("strict compliance check failed: scan was incomplete (%d file(s) unreadable or failed)", len(result.FailedFiles))
+			}
+
 			// Determine exit code
 			failThreshold := core.ParseSeverity(failOn)
 			shouldFail := false
@@ -176,6 +187,7 @@ ISO/IEC 27701, and Quebec Law 25.`,
 	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text, sarif, json, markdown, html")
 	cmd.Flags().StringVarP(&outFile, "out", "o", "", "Output file path (default stdout)")
 	cmd.Flags().BoolVar(&applyFix, "fix", false, "Automatically remediate detected violations where safe")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview autofix diffs without modifying files on disk")
 	cmd.Flags().BoolVar(&enableAI, "ai", false, "Enable AI semantic privacy analysis (Gemini, OpenAI, Ollama, Heuristic)")
 	cmd.Flags().StringVar(&aiProvider, "ai-provider", "auto", "AI provider to use (auto, gemini, openai, ollama, heuristic)")
 	cmd.Flags().StringVar(&framework, "framework", "pipeda", "Target compliance framework: pipeda, soc2, iso27701, law25, all")

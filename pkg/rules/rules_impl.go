@@ -44,19 +44,21 @@ func (r *RuleSafeguardLog) Inspect(ctx *core.FileContext, cfg *config.Config) []
 	}
 
 	for i := 0; i < len(ctx.Lines); i++ {
-		line := ctx.Lines[i]
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		line := ctx.Lines[i]
+		code := ctx.GetCodeLine(i)
+		trimmed := strings.TrimSpace(line)
 
 		// Single line match
-		if logSinkRegex.MatchString(line) {
+		if logSinkRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -69,24 +71,27 @@ func (r *RuleSafeguardLog) Inspect(ctx *core.FileContext, cfg *config.Config) []
 		}
 
 		// Multiline log call detection: if line starts a log call, check following lines within the statement
-		if logSinkStartRegex.MatchString(line) {
+		if logSinkStartRegex.MatchString(code) {
 			var blockLines []string
-			blockLines = append(blockLines, line)
+			blockLines = append(blockLines, code)
 			foundPII := false
 			foundLine := i + 1
 
-			depth := strings.Count(line, "(") - strings.Count(line, ")")
+			depth := strings.Count(code, "(") - strings.Count(code, ")")
 			for j := i + 1; j < len(ctx.Lines) && j < i+12; j++ {
-				subLine := ctx.Lines[j]
-				blockLines = append(blockLines, subLine)
-				depth += strings.Count(subLine, "(") - strings.Count(subLine, ")")
+				if ctx.IsCommentLine(j) {
+					continue
+				}
+				subCode := ctx.GetCodeLine(j)
+				blockLines = append(blockLines, subCode)
+				depth += strings.Count(subCode, "(") - strings.Count(subCode, ")")
 
-				if piiWordRegex.MatchString(subLine) && !strings.Contains(subLine, "maskIdentifier") && !strings.Contains(subLine, "hash") {
+				if piiWordRegex.MatchString(subCode) && !strings.Contains(subCode, "maskIdentifier") && !strings.Contains(subCode, "hash") {
 					foundPII = true
 					foundLine = j + 1
 				}
 
-				if depth <= 0 || strings.Contains(subLine, ");") || strings.Contains(subLine, "}") && depth <= 0 {
+				if depth <= 0 || strings.Contains(subCode, ");") || strings.Contains(subCode, "}") && depth <= 0 {
 					break
 				}
 			}
@@ -97,6 +102,7 @@ func (r *RuleSafeguardLog) Inspect(ctx *core.FileContext, cfg *config.Config) []
 					PrincipleID:       r.PrincipleID(),
 					Principle:         r.Principle(),
 					Severity:          sev,
+					Confidence:        core.ConfidenceHigh,
 					FilePath:          ctx.FilePath,
 					Line:              foundLine,
 					LineText:          strings.TrimSpace(ctx.Lines[foundLine-1]),
@@ -155,12 +161,13 @@ func (r *RuleRawSIN) Inspect(ctx *core.FileContext, cfg *config.Config) []core.V
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		matches := sinExtractor.FindAllString(line, -1)
+		matches := sinExtractor.FindAllString(code, -1)
 		for _, m := range matches {
 			isLuhnValid := luhn.IsValidCanadianSIN(m)
 			masked := maskSIN(m)
@@ -173,6 +180,7 @@ func (r *RuleRawSIN) Inspect(ctx *core.FileContext, cfg *config.Config) []core.V
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          redactSINLine(trimmed),
@@ -211,13 +219,16 @@ func (r *RuleConsentOptIn) Frameworks() map[core.Framework]string {
 var optInFalseRegex = regexp.MustCompile(`(?i)optInConfirmed\s*:\s*false`)
 var thirdPartyAdRegex = regexp.MustCompile(`(?i)(trackThirdPartyAdConversion|sendMarketingTelemetry|trackAdConversion)`)
 
-func isGuardedByConsentLocally(lines []string, targetIdx int) bool {
+func isGuardedByConsentLocally(ctx *core.FileContext, targetIdx int) bool {
 	start := targetIdx - 15
 	if start < 0 {
 		start = 0
 	}
 	for k := start; k < targetIdx; k++ {
-		l := lines[k]
+		if ctx.IsCommentLine(k) {
+			continue
+		}
+		l := ctx.GetCodeLine(k)
 		if strings.Contains(l, "hasConsentFor") || strings.Contains(l, "verify_consent") || strings.Contains(l, "consentGuard") || strings.Contains(l, "checkConsent") {
 			return true
 		}
@@ -233,17 +244,19 @@ func (r *RuleConsentOptIn) Inspect(ctx *core.FileContext, cfg *config.Config) []
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if optInFalseRegex.MatchString(line) {
+		if optInFalseRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -252,13 +265,14 @@ func (r *RuleConsentOptIn) Inspect(ctx *core.FileContext, cfg *config.Config) []
 				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
-		} else if thirdPartyAdRegex.MatchString(line) {
-			if !isGuardedByConsentLocally(ctx.Lines, i) {
+		} else if thirdPartyAdRegex.MatchString(code) {
+			if !isGuardedByConsentLocally(ctx, i) {
 				violations = append(violations, core.Violation{
 					RuleID:            r.ID(),
 					PrincipleID:       r.PrincipleID(),
 					Principle:         r.Principle(),
 					Severity:          sev,
+					Confidence:        core.ConfidenceHigh,
 					FilePath:          ctx.FilePath,
 					Line:              i + 1,
 					LineText:          trimmed,
@@ -315,17 +329,19 @@ func (r *RuleOverCollection) Inspect(ctx *core.FileContext, cfg *config.Config) 
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if healthCardRegex.MatchString(line) {
+		if healthCardRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -377,23 +393,25 @@ func (r *RulePurposeUntagged) Inspect(ctx *core.FileContext, cfg *config.Config)
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if sensitiveFieldRegex.MatchString(line) && !strings.Contains(line, "@privacy") && !strings.Contains(line, "purpose:") {
+		if sensitiveFieldRegex.MatchString(code) && !strings.Contains(code, "@privacy") && !strings.Contains(code, "purpose:") {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
 				Message:           r.Description(),
 				Remediation:       "Add @privacy(purpose: 'tax_reporting', retention: '7y') attribute.",
-				CanAutoFix:        true,
+				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
 		}
@@ -439,23 +457,25 @@ func (r *RuleRetentionDisposal) Inspect(ctx *core.FileContext, cfg *config.Confi
 	hasAutoPurge := strings.Contains(ctx.Content, "autoPurge") || strings.Contains(ctx.Content, "expiresAt") || strings.Contains(ctx.Content, "ttl")
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if modelDeclarationRegex.MatchString(line) && !hasAutoPurge {
+		if modelDeclarationRegex.MatchString(code) && !hasAutoPurge {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
 				Message:           r.Description(),
 				Remediation:       "Define an expiration hook or TTL column: `expiresAt DateTime? @privacy(autoPurge: true)`.",
-				CanAutoFix:        true,
+				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
 		}
@@ -497,17 +517,19 @@ func (r *RuleIncompleteDSR) Inspect(ctx *core.FileContext, cfg *config.Config) [
 	hasFullExport := strings.Contains(ctx.Content, "transactions") && strings.Contains(ctx.Content, "accessLogs")
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if dsrFunctionRegex.MatchString(line) && !hasFullExport {
+		if dsrFunctionRegex.MatchString(code) && !hasFullExport {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -553,17 +575,19 @@ func (r *RuleUnvettedSubprocessor) Inspect(ctx *core.FileContext, cfg *config.Co
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if unvettedDomainRegex.MatchString(line) {
+		if unvettedDomainRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -611,17 +635,19 @@ func (r *RuleAccuracyValidator) Inspect(ctx *core.FileContext, cfg *config.Confi
 	hasLuhnValidator := strings.Contains(ctx.Content, "isValidCanadianSIN") || strings.Contains(ctx.Content, "sinValidator") || strings.Contains(ctx.Content, "luhn")
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if sinInputHandler.MatchString(line) && !hasLuhnValidator {
+		if sinInputHandler.MatchString(code) && !hasLuhnValidator {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -680,6 +706,7 @@ func (r *RuleOpennessPolicyRoute) Inspect(ctx *core.FileContext, cfg *config.Con
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceMedium,
 				FilePath:          ctx.FilePath,
 				Line:              1,
 				LineText:          strings.TrimSpace(ctx.Lines[0]),
@@ -724,6 +751,7 @@ func (r *RuleChallengingRecourse) Inspect(ctx *core.FileContext, cfg *config.Con
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          core.SeverityInfo,
+				Confidence:        core.ConfidenceLow,
 				FilePath:          ctx.FilePath,
 				Line:              1,
 				LineText:          "",

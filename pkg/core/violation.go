@@ -52,12 +52,32 @@ func (s Severity) String() string {
 	return string(s)
 }
 
+// Confidence indicates analytical certainty for a finding.
+type Confidence string
+
+const (
+	ConfidenceHigh   Confidence = "HIGH"
+	ConfidenceMedium Confidence = "MEDIUM"
+	ConfidenceLow    Confidence = "LOW"
+)
+
+// AssessmentStatus defines audit evaluation outcomes across statutory principles and security criteria.
+type AssessmentStatus string
+
+const (
+	StatusPass          AssessmentStatus = "PASS"
+	StatusFail          AssessmentStatus = "FAIL"
+	StatusNotAssessed   AssessmentStatus = "NOT_ASSESSED"
+	StatusNotApplicable AssessmentStatus = "NOT_APPLICABLE"
+)
+
 // Violation represents a statutory or technical finding against PIPEDA Schedule 1, SOC 2, or ISO 27701.
 type Violation struct {
 	RuleID            string               `json:"ruleId"`
 	PrincipleID       int                  `json:"principleId"`
 	Principle         string               `json:"principle"`
 	Severity          Severity             `json:"severity"`
+	Confidence        Confidence           `json:"confidence,omitempty"`
 	FilePath          string               `json:"filePath"`
 	Line              int                  `json:"line"`
 	Column            int                  `json:"column,omitempty"`

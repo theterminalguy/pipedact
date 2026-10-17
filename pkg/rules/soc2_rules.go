@@ -58,20 +58,21 @@ func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config)
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
 		isSecretFound := false
 
 		// Check known provider-specific patterns
-		if awsKeyRegex.MatchString(line) || slackTokenRegex.MatchString(line) ||
-			privateKeyRegex.MatchString(line) || githubTokenRegex.MatchString(line) {
+		if awsKeyRegex.MatchString(code) || slackTokenRegex.MatchString(code) ||
+			privateKeyRegex.MatchString(code) || githubTokenRegex.MatchString(code) {
 			isSecretFound = true
-		} else if secretKeyNameRegex.MatchString(line) {
+		} else if secretKeyNameRegex.MatchString(code) {
 			// Check if literal high-entropy secret string is assigned
-			matches := quotedStringRegex.FindAllStringSubmatch(line, -1)
+			matches := quotedStringRegex.FindAllStringSubmatch(code, -1)
 			for _, m := range matches {
 				val := strings.ToLower(m[1])
 				// Ignore explicit placeholder values
@@ -90,6 +91,7 @@ func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config)
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          redactSecrets(trimmed),
@@ -135,20 +137,24 @@ func (r *RuleInsecureCookie) Inspect(ctx *core.FileContext, cfg *config.Config) 
 	}
 
 	for i := 0; i < len(ctx.Lines); i++ {
-		line := ctx.Lines[i]
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		line := ctx.Lines[i]
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if cookieCallRegex.MatchString(line) {
+		if cookieCallRegex.MatchString(code) {
 			// Extract arguments block starting from this line up to matching closing parenthesis or 15 lines
 			var blockLines []string
 			parenDepth := 0
 			endLine := i
 
 			for j := i; j < len(ctx.Lines) && j < i+15; j++ {
-				l := ctx.Lines[j]
+				if ctx.IsCommentLine(j) {
+					continue
+				}
+				l := ctx.GetCodeLine(j)
 				blockLines = append(blockLines, l)
 				parenDepth += strings.Count(l, "(") - strings.Count(l, ")")
 				endLine = j
@@ -185,6 +191,7 @@ func (r *RuleInsecureCookie) Inspect(ctx *core.FileContext, cfg *config.Config) 
 					PrincipleID:       r.PrincipleID(),
 					Principle:         r.Principle(),
 					Severity:          sev,
+					Confidence:        core.ConfidenceHigh,
 					FilePath:          ctx.FilePath,
 					Line:              i + 1,
 					LineText:          trimmed,
@@ -235,17 +242,19 @@ func (r *RuleWeakCrypto) Inspect(ctx *core.FileContext, cfg *config.Config) []co
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if weakHashRegex.MatchString(line) {
+		if weakHashRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
@@ -291,17 +300,19 @@ func (r *RuleWildcardCORS) Inspect(ctx *core.FileContext, cfg *config.Config) []
 	}
 
 	for i, line := range ctx.Lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
+		if ctx.IsCommentLine(i) {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
+		code := ctx.GetCodeLine(i)
 
-		if wildcardCORSRegex.MatchString(line) {
+		if wildcardCORSRegex.MatchString(code) {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
 				Principle:         r.Principle(),
 				Severity:          sev,
+				Confidence:        core.ConfidenceHigh,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,

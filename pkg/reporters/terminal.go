@@ -35,10 +35,46 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		bold.Fprintf(w, "🍁 pipedact v1.2.0")
 		fmt.Fprintf(w, " — Privacy & Security Code Linter (PIPEDA Schedule 1)\n")
 	}
-	gray.Fprintf(w, "   Scanned %d files (%d lines) in %v\n\n", result.ScannedFiles, result.ScannedLines, result.Duration)
+
+	if !result.IsComplete {
+		yellow.Fprintf(w, "⚠️  PARTIAL SCAN WARNING: %d file(s) failed to read or process\n", len(result.FailedFiles))
+		gray.Fprintf(w, "   Discovered: %d | Scanned: %d (%d lines) | Skipped: %d | Failed: %d in %v\n\n",
+			result.DiscoveredFiles, result.ScannedFiles, result.ScannedLines, len(result.SkippedFiles), len(result.FailedFiles), result.Duration)
+	} else {
+		gray.Fprintf(w, "   Discovered: %d | Scanned: %d (%d lines) | Skipped: %d in %v\n\n",
+			result.DiscoveredFiles, result.ScannedFiles, result.ScannedLines, len(result.SkippedFiles), result.Duration)
+	}
+
+	if len(result.FailedFiles) > 0 {
+		red.Fprintf(w, "  Failed Files (%d):\n", len(result.FailedFiles))
+		for _, f := range result.FailedFiles {
+			red.Fprintf(w, "   ✖ %s: %s\n", f.Path, f.Error)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+
+	if len(result.SkippedFiles) > 0 {
+		gray.Fprintf(w, "  Skipped Files (%d):\n", len(result.SkippedFiles))
+		for i, s := range result.SkippedFiles {
+			if i >= 10 {
+				gray.Fprintf(w, "   ... and %d more\n", len(result.SkippedFiles)-10)
+				break
+			}
+			gray.Fprintf(w, "   - %s [%s: %s]\n", s.Path, s.Reason, s.Detail)
+		}
+		fmt.Fprintf(w, "\n")
+	}
 
 	if len(result.Violations) == 0 {
-		if result.Framework == core.FrameworkSOC2 {
+		if !result.IsComplete {
+			yellow.Fprintf(w, "⚠️  INCOMPLETE SCAN: 0 violations in %d scanned files, but %d file(s) could not be evaluated.\n",
+				result.ScannedFiles, len(result.FailedFiles))
+			if strict {
+				red.Fprintf(w, "  Strict mode failure: Incomplete scans are not permitted.\n\n")
+			} else {
+				fmt.Fprintf(w, "\n")
+			}
+		} else if result.Framework == core.FrameworkSOC2 {
 			green.Fprintf(w, "✔ CLEAN SCAN: No technical exceptions detected for mapped SOC 2 criteria.\n")
 			fmt.Fprintf(w, "  All automated checks passed. Technical readiness score: ")
 			green.Fprintf(w, "100%% (Passing)\n\n")
@@ -68,7 +104,11 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		fmt.Fprintf(w, "  #%d ", i+1)
 		badge.Fprintf(w, "[%s]", v.Severity)
 		bold.Fprintf(w, " %s", v.Principle)
-		gray.Fprintf(w, " (%s)\n", v.RuleID)
+		gray.Fprintf(w, " (%s)", v.RuleID)
+		if v.Confidence != "" {
+			gray.Fprintf(w, " [Confidence: %s]", v.Confidence)
+		}
+		fmt.Fprintf(w, "\n")
 
 		if len(v.FrameworkMappings) > 0 {
 			var fwRefs []string
@@ -123,8 +163,13 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		gray.Fprintf(w, "   PIPEDA Score: %d%% | SOC 2 Readiness: %d%%\n", result.ComplianceScore, result.SOC2Score)
 	}
 
+	passed := result.Passed
+	if strict && !result.IsComplete {
+		passed = false
+	}
+
 	fmt.Fprintf(w, "Total Violations: %d | Gate Status: ", len(result.Violations))
-	if result.Passed {
+	if passed {
 		green.Fprintf(w, "PASS (Exit 0)\n\n")
 	} else {
 		red.Fprintf(w, "FAIL (Exit 1)\n\n")
