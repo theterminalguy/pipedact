@@ -11,16 +11,36 @@ import (
 )
 
 func newPrinciplesCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:     "principles",
-		Aliases: []string{"rules", "matrix"},
-		Short:   "Display the PIPEDA Schedule 1 Fair Information Principles technical matrix",
-		Run: func(cmd *cobra.Command, args []string) {
-			principles := core.GetSchedule1Principles()
+	var framework string
 
+	cmd := &cobra.Command{
+		Use:     "principles",
+		Aliases: []string{"rules", "matrix", "criteria"},
+		Short:   "Display the compliance principles and Trust Services Criteria matrix",
+		Run: func(cmd *cobra.Command, args []string) {
+			fw := core.ParseFramework(framework)
 			bold := color.New(color.Bold)
 			cyan := color.New(color.FgCyan)
 
+			if fw == core.FrameworkSOC2 {
+				bold.Println("\n🛡️  AICPA SOC 2 Type II — Trust Services Criteria Technical Map")
+				fmt.Println("How pipedact maps Security (CC6/CC7) and Privacy (P1-P5) criteria to automated gates.")
+				fmt.Println()
+
+				w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+				fmt.Fprintln(w, "CRITERIA\tCATEGORY\tNAME\tWEIGHT\tDESCRIPTION")
+				fmt.Fprintln(w, "────────\t────────\t────\t──────\t───────────")
+
+				for _, c := range core.GetSOC2Criteria() {
+					fmt.Fprintf(w, "%s\t%s\t%s\t%d%%\t%s\n", c.ID, c.Category, c.Name, c.Weight, c.Description)
+				}
+				w.Flush()
+				cyan.Println("\nRun 'pipedact check --framework soc2' to verify your codebase against SOC 2 criteria.")
+				fmt.Println()
+				return
+			}
+
+			principles := core.GetSchedule1Principles()
 			bold.Println("\n🍁 PIPEDA Schedule 1 — 10 Fair Information Principles Technical Map")
 			fmt.Println("How pipedact maps Canadian federal statutory requirements to automated gates.")
 			fmt.Println()
@@ -39,4 +59,7 @@ func newPrinciplesCmd() *cobra.Command {
 			fmt.Println()
 		},
 	}
+
+	cmd.Flags().StringVar(&framework, "framework", "pipeda", "Framework matrix to display: pipeda, soc2")
+	return cmd
 }

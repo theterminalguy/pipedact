@@ -170,6 +170,42 @@ func (h *HeuristicReasoner) Explain(ctx context.Context, ruleID string, codeSnip
 			VulnerableCode: `const { email, password, healthCardNumber } = req.body;`,
 			CompliantCode:  `const { email, password } = req.body; // Health cards omitted for standard retail authentication`,
 		},
+		"SOC2-CC6-HARDCODED-SECRET": {
+			RuleID:       "SOC2-CC6-HARDCODED-SECRET",
+			Principle:    "SOC 2 CC6.1 / Common Criteria",
+			Statute:      "AICPA Trust Services Criteria CC6.1 & CC6.6 (Logical Access & Boundary Protection)",
+			LegalSummary: "Common Criteria 6.1 requires logical access controls to protect sensitive credentials from unauthorized access. Hardcoded API secrets, database passwords, and JWT signing keys in git repositories create immediate auditor exceptions during SOC 2 Type II sampling audits.",
+			OPCPrecedent: "AICPA SOC 2 Guide: External auditors sample source code repositories during Type II evaluation; exposed credentials represent a control failure requiring management response and remediation.",
+			VulnerableCode: `const apiKey = "sk_live_98374928374928374928";`,
+			CompliantCode:  `const apiKey = process.env.API_KEY || (await secretVault.getSecret("api_key"));`,
+		},
+		"SOC2-CC6-INSECURE-COOKIE": {
+			RuleID:       "SOC2-CC6-INSECURE-COOKIE",
+			Principle:    "SOC 2 CC6.7 / Data Transmission",
+			Statute:      "AICPA Trust Services Criteria CC6.6 & CC6.7 (Safeguarding Data in Transit)",
+			LegalSummary: "Sensitive session cookies transmitted without 'secure: true' or 'httpOnly: true' flags expose tokens to man-in-the-middle sniffing and cross-site scripting (XSS) extraction.",
+			OPCPrecedent: "OWASP Top 10 & SOC 2 CC6.7 Testing: Web session tokens must be protected during transmission across external networks with secure and httpOnly attributes.",
+			VulnerableCode: `res.cookie('token', jwt, { secure: false });`,
+			CompliantCode:  `res.cookie('token', jwt, { secure: true, httpOnly: true, sameSite: 'strict' });`,
+		},
+		"SOC2-CC6-WEAK-CRYPTO": {
+			RuleID:       "SOC2-CC6-WEAK-CRYPTO",
+			Principle:    "SOC 2 CC6.6 / Cryptography",
+			Statute:      "AICPA Trust Services Criteria CC6.6 (Boundary Protection & Encryption Standards)",
+			LegalSummary: "Use of broken cryptographic primitives (MD5, SHA-1) violates Common Criteria 6.6 data protection requirements and industry standard cryptographic suites (NIST SP 800-131A).",
+			OPCPrecedent: "NIST Special Publication 800-131A Transitioning the Use of Cryptographic Algorithms; AICPA CC6.6 requires approved encryption for protecting data at rest and in transit.",
+			VulnerableCode: `const hash = crypto.createHash('md5').update(password).digest('hex');`,
+			CompliantCode:  `const hash = await argon2.hash(password); // or crypto.createHash('sha256') for digests`,
+		},
+		"SOC2-CC6-WILDCARD-CORS": {
+			RuleID:       "SOC2-CC6-WILDCARD-CORS",
+			Principle:    "SOC 2 CC6.6 / Network Boundary",
+			Statute:      "AICPA Trust Services Criteria CC6.6 (Boundary Protection)",
+			LegalSummary: "Wildcard CORS ('*') permits arbitrary third-party websites to make authenticated requests or exfiltrate private API responses from a user's browser session.",
+			OPCPrecedent: "CORS Misconfiguration Testing in SOC 2: Access-Control-Allow-Origin must be restricted to explicit, authenticated tenant origins.",
+			VulnerableCode: `app.use(cors({ origin: '*' }));`,
+			CompliantCode:  `app.use(cors({ origin: ['https://app.example.com', 'https://api.example.com'] }));`,
+		},
 	}
 
 	if exp, found := explanations[ruleID]; found {

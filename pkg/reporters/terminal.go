@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/theterminalguy/pipedact/pkg/core"
@@ -23,14 +24,29 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 	gray := color.New(color.FgHiBlack)
 
 	fmt.Fprintf(w, "\n")
-	bold.Fprintf(w, "🍁 pipedact v1.2.0")
-	fmt.Fprintf(w, " — Statutory Privacy Linter for PIPEDA (CA-Schedule 1)\n")
+	switch result.Framework {
+	case core.FrameworkSOC2:
+		bold.Fprintf(w, "🛡️  pipedact v1.2.0")
+		fmt.Fprintf(w, " — SOC 2 Type II Trust Services Criteria Scanner (Security & Privacy)\n")
+	case core.FrameworkAll:
+		bold.Fprintf(w, "🌐 pipedact v1.2.0")
+		fmt.Fprintf(w, " — Multi-Framework Scanner (PIPEDA / SOC 2 / ISO 27701 / Quebec Law 25)\n")
+	default:
+		bold.Fprintf(w, "🍁 pipedact v1.2.0")
+		fmt.Fprintf(w, " — Statutory Privacy Linter for PIPEDA (CA-Schedule 1)\n")
+	}
 	gray.Fprintf(w, "   Scanned %d files (%d lines) in %v\n\n", result.ScannedFiles, result.ScannedLines, result.Duration)
 
 	if len(result.Violations) == 0 {
-		green.Fprintf(w, "✔ CLEAN PIPEDA AUDIT: No statutory privacy violations detected.\n")
-		fmt.Fprintf(w, "  All 10 Fair Information Principles verified. Compliance score: ")
-		green.Fprintf(w, "100%% (Audit Ready)\n\n")
+		if result.Framework == core.FrameworkSOC2 {
+			green.Fprintf(w, "✔ CLEAN SOC 2 AUDIT: No security or privacy criteria exceptions detected.\n")
+			fmt.Fprintf(w, "  All Trust Services Criteria verified. Readiness score: ")
+			green.Fprintf(w, "100%% (Audit Ready)\n\n")
+		} else {
+			green.Fprintf(w, "✔ CLEAN AUDIT: No statutory compliance violations detected.\n")
+			fmt.Fprintf(w, "  All Fair Information Principles verified. Compliance score: ")
+			green.Fprintf(w, "100%% (Audit Ready)\n\n")
+		}
 		return
 	}
 
@@ -54,6 +70,25 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		bold.Fprintf(w, " %s", v.Principle)
 		gray.Fprintf(w, " (%s)\n", v.RuleID)
 
+		if len(v.FrameworkMappings) > 0 {
+			var fwRefs []string
+			if ref, ok := v.FrameworkMappings[core.FrameworkPIPEDA]; ok && ref != "" {
+				fwRefs = append(fwRefs, fmt.Sprintf("PIPEDA: %s", ref))
+			}
+			if ref, ok := v.FrameworkMappings[core.FrameworkSOC2]; ok && ref != "" {
+				fwRefs = append(fwRefs, fmt.Sprintf("SOC 2: %s", ref))
+			}
+			if ref, ok := v.FrameworkMappings[core.FrameworkISO27701]; ok && ref != "" {
+				fwRefs = append(fwRefs, fmt.Sprintf("ISO 27701: %s", ref))
+			}
+			if ref, ok := v.FrameworkMappings[core.FrameworkLaw25]; ok && ref != "" {
+				fwRefs = append(fwRefs, fmt.Sprintf("Law 25: %s", ref))
+			}
+			if len(fwRefs) > 0 {
+				gray.Fprintf(w, "     Frameworks: %s\n", strings.Join(fwRefs, " | "))
+			}
+		}
+
 		fmt.Fprintf(w, "     %s:%d\n", v.FilePath, v.Line)
 		fmt.Fprintf(w, "     %s\n", v.Message)
 
@@ -68,7 +103,13 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 
 	// Compliance Score Bar & Summary
 	fmt.Fprintf(w, "─────────────────────────────────────────────────────────────────────────────\n")
-	bold.Fprintf(w, "PIPEDA Compliance Score: ")
+	scoreTitle := "PIPEDA Compliance Score: "
+	if result.Framework == core.FrameworkSOC2 {
+		scoreTitle = "SOC 2 Type II Readiness Score: "
+	} else if result.Framework == core.FrameworkAll {
+		scoreTitle = "Unified Compliance Score: "
+	}
+	bold.Fprintf(w, "%s", scoreTitle)
 
 	if result.ComplianceScore >= 90 {
 		green.Fprintf(w, "%d%% — %s\n", result.ComplianceScore, result.ScoreLabel)
@@ -78,7 +119,15 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 		red.Fprintf(w, "%d%% — %s\n", result.ComplianceScore, result.ScoreLabel)
 	}
 
-	fmt.Fprintf(w, "Total Violations: %d | Schedule 1 Status: ", len(result.Violations))
+	if result.Framework == core.FrameworkAll {
+		gray.Fprintf(w, "   PIPEDA Schedule 1 Score: %d%% | SOC 2 Type II Readiness: %d%%\n", result.ComplianceScore, result.SOC2Score)
+	}
+
+	statusLabel := "Compliance Gate Status: "
+	if result.Framework == core.FrameworkSOC2 {
+		statusLabel = "SOC 2 Gate Status: "
+	}
+	fmt.Fprintf(w, "Total Violations: %d | %s", len(result.Violations), statusLabel)
 	if result.Passed {
 		green.Fprintf(w, "PASS (Exit 0)\n\n")
 	} else {

@@ -12,6 +12,7 @@ type Rule interface {
 	Principle() string
 	Severity() core.Severity
 	Description() string
+	Frameworks() map[core.Framework]string
 	Inspect(ctx *core.FileContext, cfg *config.Config) []core.Violation
 }
 
@@ -20,7 +21,7 @@ type Registry struct {
 	rules []Rule
 }
 
-// NewRegistry creates a registry initialized with all PIPEDA Schedule 1 rules.
+// NewRegistry creates a registry initialized with all PIPEDA Schedule 1, SOC 2, and ISO 27701 rules.
 func NewRegistry() *Registry {
 	r := &Registry{}
 	r.Register(
@@ -35,6 +36,11 @@ func NewRegistry() *Registry {
 		&RuleAccuracyValidator{},
 		&RuleOpennessPolicyRoute{},
 		&RuleChallengingRecourse{},
+		// SOC 2 Trust Services Security Criteria
+		&RuleHardcodedSecret{},
+		&RuleInsecureCookie{},
+		&RuleWeakCrypto{},
+		&RuleWildcardCORS{},
 	)
 	return r
 }

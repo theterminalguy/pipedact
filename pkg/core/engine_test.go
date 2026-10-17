@@ -88,3 +88,29 @@ func TestEngineScanPrismaSchema(t *testing.T) {
 		t.Errorf("expected Principle 5 (Retention) to be flagged")
 	}
 }
+
+func TestEngineScanSOC2Framework(t *testing.T) {
+	cfg := config.DefaultConfig()
+	registry := rules.NewRegistry()
+
+	var inspectors []core.RuleInspector
+	for _, r := range registry.All() {
+		inspectors = append(inspectors, r)
+	}
+
+	engine := core.NewEngine(cfg, inspectors)
+	engine.SetFramework(core.FrameworkSOC2)
+	targetDir := filepath.Join("..", "..", "testdata", "ts_backend")
+
+	result, err := engine.Scan([]string{targetDir})
+	if err != nil {
+		t.Fatalf("Engine.Scan failed: %v", err)
+	}
+
+	if result.Framework != core.FrameworkSOC2 {
+		t.Errorf("expected FrameworkSOC2, got %v", result.Framework)
+	}
+	if len(result.SOC2Status) == 0 {
+		t.Errorf("expected SOC2Status populated, got empty")
+	}
+}

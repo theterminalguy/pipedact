@@ -134,3 +134,60 @@ export async function generateUserArchive(userId: string) {
 		t.Errorf("expected principle 9, got %d", violations[0].PrincipleID)
 	}
 }
+
+func TestRuleHardcodedSecret(t *testing.T) {
+	code := `const jwt_secret = "super_secret_signing_key_123456789";`
+	ctx := core.NewFileContext("/src/auth.ts", "src/auth.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleHardcodedSecret{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for hardcoded secret, got none")
+	}
+	if violations[0].Severity != core.SeverityCritical {
+		t.Errorf("expected CRITICAL severity, got %v", violations[0].Severity)
+	}
+	if violations[0].FrameworkMappings[core.FrameworkSOC2] != "CC6.1, CC6.6" {
+		t.Errorf("expected CC6.1, CC6.6, got %s", violations[0].FrameworkMappings[core.FrameworkSOC2])
+	}
+}
+
+func TestRuleInsecureCookie(t *testing.T) {
+	code := `res.cookie('session_id', token, { secure: false });`
+	ctx := core.NewFileContext("/src/auth.ts", "src/auth.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleInsecureCookie{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for insecure cookie, got none")
+	}
+	if violations[0].Severity != core.SeverityHigh {
+		t.Errorf("expected HIGH severity, got %v", violations[0].Severity)
+	}
+}
+
+func TestRuleWeakCrypto(t *testing.T) {
+	code := `const hash = crypto.createHash('md5').update(pwd).digest('hex');`
+	ctx := core.NewFileContext("/src/crypto.ts", "src/crypto.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleWeakCrypto{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for weak md5 crypto, got none")
+	}
+}
+
+func TestRuleWildcardCORS(t *testing.T) {
+	code := `app.use(cors({ origin: "*" }));`
+	ctx := core.NewFileContext("/src/server.ts", "src/server.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleWildcardCORS{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for wildcard CORS, got none")
+	}
+}

@@ -101,3 +101,22 @@ func TestGenerateHTML(t *testing.T) {
 		t.Error("expected 80% score in HTML")
 	}
 }
+
+func TestGenerateSOC2MarkdownDossier(t *testing.T) {
+	result := mockResult()
+	result.Framework = core.FrameworkSOC2
+	result.SOC2Status = make(map[string]*core.SOC2Status)
+	for _, c := range core.GetSOC2Criteria() {
+		result.SOC2Status[c.ID] = &core.SOC2Status{
+			Criteria: c,
+			Passing:  true,
+		}
+	}
+	md := GenerateMarkdownDossier(result)
+	if !strings.Contains(md, "AICPA SOC 2 Type II Trust Services Criteria Readiness Dossier") {
+		t.Errorf("expected SOC 2 markdown header, got: %s", md)
+	}
+	if !strings.Contains(md, "Trust Services Criteria Breakdown") {
+		t.Errorf("expected criteria breakdown table")
+	}
+}

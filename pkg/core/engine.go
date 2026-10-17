@@ -19,6 +19,13 @@ type PrincipleStatus struct {
 	ScoreImpact int
 }
 
+// SOC2Status tracks compliance for a single SOC 2 Trust Services Criterion.
+type SOC2Status struct {
+	Criteria   SOC2Criteria `json:"criteria"`
+	Passing    bool         `json:"passing"`
+	Violations []Violation  `json:"violations"`
+}
+
 // AuditResult encapsulates the full diagnostic outcome of a scan.
 type AuditResult struct {
 	ScannedFiles    int
@@ -30,13 +37,17 @@ type AuditResult struct {
 	ComplianceScore int
 	ScoreLabel      string
 	Passed          bool
+	Framework       Framework
+	SOC2Status      map[string]*SOC2Status
+	SOC2Score       int
 }
 
 // Engine coordinates multi-threaded scanning of targets against rules.
 type Engine struct {
-	Config   *config.Config
-	Rules    []RuleInspector
-	maxBytes int64
+	Config          *config.Config
+	Rules           []RuleInspector
+	TargetFramework Framework
+	maxBytes        int64
 }
 
 // RuleInspector is an interface implemented by rules for scanning.
@@ -46,6 +57,7 @@ type RuleInspector interface {
 	Principle() string
 	Severity() Severity
 	Description() string
+	Frameworks() map[Framework]string
 	Inspect(ctx *FileContext, cfg *config.Config) []Violation
 }
 
@@ -55,10 +67,16 @@ func NewEngine(cfg *config.Config, rules []RuleInspector) *Engine {
 		cfg = config.DefaultConfig()
 	}
 	return &Engine{
-		Config:   cfg,
-		Rules:    rules,
-		maxBytes: 10 * 1024 * 1024, // 10MB file limit
+		Config:          cfg,
+		Rules:           rules,
+		TargetFramework: FrameworkPIPEDA,
+		maxBytes:        10 * 1024 * 1024, // 10MB file limit
 	}
+}
+
+// SetFramework sets the compliance framework to scan against.
+func (e *Engine) SetFramework(fw Framework) {
+	e.TargetFramework = fw
 }
 
 // Scan targets (files or directories).
@@ -119,6 +137,11 @@ func (e *Engine) Scan(targets []string) (*AuditResult, error) {
 
 				var fileViolations []Violation
 				for _, rule := range e.Rules {
+					if e.TargetFramework != "" && e.TargetFramework != FrameworkAll {
+						if _, mapped := rule.Frameworks()[e.TargetFramework]; !mapped {
+							continue
+						}
+					}
 					v := rule.Inspect(ctx, e.Config)
 					if len(v) > 0 {
 						fileViolations = append(fileViolations, v...)
@@ -178,6 +201,59 @@ func (e *Engine) calculateResult(violations []Violation, filesCount, linesCount 
 		scoreLabel = "Substantial Compliance (Action Needed)"
 	}
 
+	// SOC 2 Trust Services Criteria Status
+	soc2Criteria := GetSOC2Criteria()
+	soc2Map := make(map[string]*SOC2Status)
+	for _, c := range soc2Criteria {
+		soc2Map[c.ID] = &SOC2Status{
+			Criteria:   c,
+			Passing:    true,
+			Violations: []Violation{},
+		}
+	}
+
+	for _, v := range violations {
+		if mapping, ok := v.FrameworkMappings[FrameworkSOC2]; ok {
+			for critID, status := range soc2Map {
+				if strings.Contains(mapping, critID) {
+					status.Passing = false
+					status.Violations = append(status.Violations, v)
+				}
+			}
+		}
+	}
+
+	soc2Earned := 0
+	soc2TotalWeight := 0
+	for _, status := range soc2Map {
+		soc2TotalWeight += status.Criteria.Weight
+		if status.Passing {
+			soc2Earned += status.Criteria.Weight
+		}
+	}
+	soc2Score := 0
+	if soc2TotalWeight > 0 {
+		soc2Score = int(math.Round((float64(soc2Earned) / float64(soc2TotalWeight)) * 100.0))
+	}
+
+	fw := e.TargetFramework
+	if fw == "" {
+		fw = FrameworkPIPEDA
+	}
+
+	finalScore := score
+	finalLabel := scoreLabel
+	if fw == FrameworkSOC2 {
+		finalScore = soc2Score
+		if soc2Score >= 90 {
+			finalLabel = "Audit Ready (Type II Evidence Verified)"
+		} else if soc2Score >= 70 {
+			finalLabel = "Substantial Readiness (Exceptions Flagged)"
+		} else {
+			finalLabel = "High Risk / Type II Exceptions Detected"
+		}
+	}
+
 	hasCriticalOrHigh := false
 	for _, v := range violations {
 		if v.Severity == SeverityCritical || v.Severity == SeverityHigh {
@@ -193,9 +269,12 @@ func (e *Engine) calculateResult(violations []Violation, filesCount, linesCount 
 		Duration:        duration,
 		Violations:      violations,
 		PrincipleStatus: principleMap,
-		ComplianceScore: score,
-		ScoreLabel:      scoreLabel,
+		ComplianceScore: finalScore,
+		ScoreLabel:      finalLabel,
 		Passed:          !hasCriticalOrHigh && len(violations) == 0,
+		Framework:       fw,
+		SOC2Status:      soc2Map,
+		SOC2Score:       soc2Score,
 	}
 }
 

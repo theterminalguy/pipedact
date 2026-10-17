@@ -47,17 +47,18 @@ func (s Severity) Level() int {
 	}
 }
 
-// Violation represents a statutory or technical finding against PIPEDA Schedule 1.
+// Violation represents a statutory or technical finding against PIPEDA Schedule 1, SOC 2, or ISO 27701.
 type Violation struct {
-	RuleID      string   `json:"ruleId"`
-	PrincipleID int      `json:"principleId"`
-	Principle   string   `json:"principle"`
-	Severity    Severity `json:"severity"`
-	FilePath    string   `json:"filePath"`
-	Line        int      `json:"line"`
-	Column      int      `json:"column,omitempty"`
-	LineText    string   `json:"lineText"`
-	Message     string   `json:"message"`
-	Remediation string   `json:"remediation"`
-	CanAutoFix  bool     `json:"canAutoFix"`
+	RuleID            string               `json:"ruleId"`
+	PrincipleID       int                  `json:"principleId"`
+	Principle         string               `json:"principle"`
+	Severity          Severity             `json:"severity"`
+	FilePath          string               `json:"filePath"`
+	Line              int                  `json:"line"`
+	Column            int                  `json:"column,omitempty"`
+	LineText          string               `json:"lineText"`
+	Message           string               `json:"message"`
+	Remediation       string               `json:"remediation"`
+	CanAutoFix        bool                 `json:"canAutoFix"`
+	FrameworkMappings map[Framework]string `json:"frameworkMappings,omitempty"`
 }

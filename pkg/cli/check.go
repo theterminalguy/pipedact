@@ -24,14 +24,16 @@ func newCheckCmd() *cobra.Command {
 		applyFix   bool
 		enableAI   bool
 		aiProvider string
+		framework  string
 	)
 
 	cmd := &cobra.Command{
 		Use:     "check [paths...]",
 		Aliases: []string{"scan", "lint"},
-		Short:   "Scan codebase for statutory PIPEDA privacy violations",
+		Short:   "Scan codebase for statutory PIPEDA and SOC 2 compliance violations",
 		Long: `Recursively analyzes target source files, database schemas, and API calls against
-the 10 Fair Information Principles in PIPEDA Schedule 1.`,
+the 10 Fair Information Principles in PIPEDA Schedule 1, SOC 2 Trust Services Criteria,
+ISO/IEC 27701, and Quebec Law 25.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, loadedPath, err := config.LoadConfig(cfgFile)
 			if err != nil {
@@ -48,6 +50,8 @@ the 10 Fair Information Principles in PIPEDA Schedule 1.`,
 			}
 
 			engine := core.NewEngine(cfg, inspectors)
+			fw := core.ParseFramework(framework)
+			engine.SetFramework(fw)
 			result, err := engine.Scan(args)
 			if err != nil {
 				return fmt.Errorf("scan failed: %w", err)
@@ -156,6 +160,7 @@ the 10 Fair Information Principles in PIPEDA Schedule 1.`,
 	cmd.Flags().BoolVar(&applyFix, "fix", false, "Automatically remediate detected violations where safe")
 	cmd.Flags().BoolVar(&enableAI, "ai", false, "Enable AI semantic privacy analysis (Gemini, OpenAI, Ollama, Heuristic)")
 	cmd.Flags().StringVar(&aiProvider, "ai-provider", "auto", "AI provider to use (auto, gemini, openai, ollama, heuristic)")
+	cmd.Flags().StringVar(&framework, "framework", "pipeda", "Target compliance framework: pipeda, soc2, iso27701, law25, all")
 
 	return cmd
 }
