@@ -699,8 +699,20 @@ func (r *RuleOpennessPolicyRoute) Inspect(ctx *core.FileContext, cfg *config.Con
 		return nil
 	}
 
-	hasAuthRoutes := strings.Contains(ctx.Content, "/auth") || strings.Contains(ctx.Content, "/register") || strings.Contains(ctx.Content, "/user")
-	hasPrivacyRoute := strings.Contains(ctx.Content, "/privacy") || strings.Contains(ctx.Content, "/legal")
+	hasAuthRoutes := false
+	hasPrivacyRoute := false
+	for i := range ctx.Lines {
+		if ctx.IsCommentLine(i) {
+			continue
+		}
+		code := ctx.GetCodeLine(i)
+		if strings.Contains(code, "/auth") || strings.Contains(code, "/register") || strings.Contains(code, "/user") {
+			hasAuthRoutes = true
+		}
+		if strings.Contains(code, "/privacy") || strings.Contains(code, "/legal") {
+			hasPrivacyRoute = true
+		}
+	}
 
 	if hasAuthRoutes && !hasPrivacyRoute {
 		return []core.Violation{
