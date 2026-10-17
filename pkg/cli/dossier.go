@@ -21,9 +21,9 @@ func newDossierCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "dossier [paths...]",
-		Short: "Generate official compliance dossier (PIPEDA Schedule 1 or SOC 2 Type II)",
-		Long: `Generates a formal compliance dossier synthesizing automated static analysis findings
-with statutory obligations under PIPEDA Schedule 1 or AICPA SOC 2 Trust Services Criteria.`,
+		Short: "Generate PIPEDA or SOC 2 technical assessment report",
+		Long: `Generates a structured technical assessment report synthesizing static analysis findings
+mapped to PIPEDA Schedule 1 principles or AICPA SOC 2 Trust Services Criteria.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _, err := config.LoadConfig(cfgFile)
 			if err != nil {

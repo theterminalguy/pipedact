@@ -1,14 +1,19 @@
 version: "1.0"
 jurisdiction: "CA-PIPEDA"
 
+# Organization Privacy Officer contact details.
+# NOTE: Replace these placeholder values with your organization's actual designated
+# Privacy Officer contact information and dispute resolution route.
 privacy_officer:
   name: "Data Privacy Officer"
   email: "privacy@organization.ca"
   dispute_url: "https://organization.ca/legal/privacy/dispute"
 
-# Principle 2 & 4: Limiting Collection & Identifying Purposes
+# Principle 2 & 4: Identifying Purposes & Limiting Collection
+# NOTE: Schema annotations (e.g. `@privacy(purpose: "...")`) are an engineering convention
+# adopted by pipedact to verify data minimization at the database schema layer.
 schemas:
-  enforcePurposeTags: true
+  enforcePurposeTags: true # Set false to disable requirement for custom schema purpose tags
   allowedPurposes:
     - user_authentication
     - billing_tax_invoicing
@@ -31,11 +36,17 @@ sinks:
     - logging.*
     - print
 
-# Principle 5: Retention Enforcement
+# Principle 5: Retention & Disposal
+# NOTE: PIPEDA does not mandate a universal retention duration; retention must be limited
+# to the time necessary to fulfill the identified purpose. `defaultMaxTtlDays` is an
+# organizational baseline policy threshold for database models lacking explicit retention schedules.
 retention:
-  defaultMaxTtlDays: 730
+  defaultMaxTtlDays: 730 # 2-year organizational baseline default (configurable)
   requireHardDeleteSchedule: true
 
+# Patterns and directories excluded from scanning.
+# NOTE: The project excludes pkg/ai, pkg/fix, pkg/rules, and pkg/web/static because they contain
+# the linter engine's own internal rule dictionaries, regex definitions, and visual assets.
 ignore:
   - "**/*_test.go"
   - "**/*.spec.ts"

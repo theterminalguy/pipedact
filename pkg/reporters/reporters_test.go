@@ -83,7 +83,7 @@ func TestGenerateJSON(t *testing.T) {
 func TestGenerateMarkdownDossier(t *testing.T) {
 	result := mockResult()
 	md := GenerateMarkdownDossier(result)
-	if !strings.Contains(md, "OPC PIPEDA Schedule 1 Self-Assessment Compliance Dossier") {
+	if !strings.Contains(md, "PIPEDA Schedule 1 Technical Assessment Report") {
 		t.Errorf("expected markdown header")
 	}
 	if !strings.Contains(md, "Compliance Score:** 80%") {
@@ -113,7 +113,7 @@ func TestGenerateSOC2MarkdownDossier(t *testing.T) {
 		}
 	}
 	md := GenerateMarkdownDossier(result)
-	if !strings.Contains(md, "AICPA SOC 2 Type II Trust Services Criteria Readiness Dossier") {
+	if !strings.Contains(md, "SOC 2 Trust Services Criteria Technical Assessment Report") {
 		t.Errorf("expected SOC 2 markdown header, got: %s", md)
 	}
 	if !strings.Contains(md, "Trust Services Criteria Breakdown") {

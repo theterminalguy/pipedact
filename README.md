@@ -1,154 +1,281 @@
-# pipedact 🍁🛡️
+# Pipedact 🍁🛡️
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub release](https://img.shields.io/github/v/release/theterminalguy/pipedact?color=blue)](https://github.com/theterminalguy/pipedact/releases)
 [![CI](https://github.com/theterminalguy/pipedact/actions/workflows/ci.yml/badge.svg)](https://github.com/theterminalguy/pipedact/actions/workflows/ci.yml)
-[![PIPEDA Gate](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda-gate.yml/badge.svg)](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda-gate.yml)
+[![Compliance Gate](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda.yml/badge.svg)](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/theterminalguy/pipedact)](https://goreportcard.com/report/github.com/theterminalguy/pipedact)
-[![Jurisdiction: CA-PIPEDA](https://img.shields.io/badge/Jurisdiction-CA--PIPEDA%20%7C%20Bill%20C--27-crimson.svg)](https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/)
-[![Framework: SOC 2 Type II](https://img.shields.io/badge/Framework-AICPA%20SOC%202%20Type%20II-teal.svg)](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2)
-[![Standard: ISO/IEC 27701](https://img.shields.io/badge/Standard-ISO%2FIEC%2027701%20%7C%20Law%2025-blueviolet.svg)](https://www.iso.org/standard/71670.html)
 
-> **Continuous Privacy-as-Code & Security Compliance Suite for Canadian Federal/Provincial Laws (PIPEDA, Law 25) and AICPA SOC 2 Type II (Trust Services Criteria).**
+**Privacy and security checks for your codebase.**
 
-`pipedact` is an open-source static analysis engine and continuous compliance suite built in Go. It enables developers, security engineers, and compliance teams to scan codebases, database schemas, and CI/CD pipelines to ensure compliance with Canada's [PIPEDA](https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/) (10 Fair Information Principles), [AICPA SOC 2 Type II](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2) (Common Criteria CC6/CC7 & Privacy Criteria P1–P5), Quebec Law 25, and ISO/IEC 27701.
+An open-source, developer-first static analysis tool that detects privacy risks, insecure patterns, and potential compliance gaps before they reach production.
 
----
-
-## 🍁 Features & Multi-Framework Gates
-
-- **Multi-Framework Compliance Engine**: Switch seamlessly between statutory privacy regimes and security criteria:
-  - `pipeda` — Canadian Federal PIPEDA Schedule 1 (10 Fair Information Principles).
-  - `soc2` — AICPA SOC 2 Type II Trust Services Criteria (Common Criteria CC6/CC7 & Privacy Criteria P1-P5).
-  - `iso27701` — Privacy Information Management System (PIMS) controls.
-  - `law25` — Quebec Law 25 transparency, consent, and confidentiality obligations.
-  - `all` — Unified multi-standard audit across all regimes simultaneously.
-- **SOC 2 Type II Security & Transmission Controls**:
-  - `SOC2-CC6-HARDCODED-SECRET` — Detects exposed API secrets, private keys, and database passwords (CC6.1/CC6.6).
-  - `SOC2-CC6-INSECURE-COOKIE` — Verifies transmission safeguards (`secure: true`, `httpOnly: true`) (CC6.6/CC6.7).
-  - `SOC2-CC6-WEAK-CRYPTO` — Blocks cryptographically broken hashing primitives like MD5 and SHA-1 (CC6.6).
-  - `SOC2-CC6-WILDCARD-CORS` — Enforces strict API origin controls, disallowing wildcard `*` origins (CC6.6).
-- **Canadian SIN Luhn Mod-10 Checksum Algorithm**: Validates and flags Canadian Social Insurance Numbers (SIN) with true Luhn checksum verification to prevent hardcoding and unredacted logging.
-- **PII Leakage & Log Sink Detection**: Blocks logging sinks (`console.log`, `logger.*`, `print`, `logging`) from receiving unredacted personal identifiers (SINs, emails, phone numbers, health cards).
-- **Consent Gate Verification**: Flags unconsented third-party marketing and telemetry dispatches.
-- **Data Minimization & Limiting Collection**: Detects excessive collection of sensitive identifiers (e.g., provincial health card numbers during standard consumer authentication).
-- **Automated Retention Enforcement**: Ensures database schemas declare purpose tags (`@privacy(purpose: "...")`) and TTL/purge hooks.
-- **Audit Evidence & Dossier Export**: Generates SARIF 2.1.0 for GitHub Code Scanning, Markdown compliance dossiers, and auditor evidence packs for external CPA and OPC audits.
-- **Automated Remediation (`--fix`)**: Auto-masks PII in logging sinks and inserts affirmative consent guards.
+Built with Canadian privacy requirements in mind, with rules mapped to [PIPEDA](https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/), Quebec Law 25, and relevant [AICPA SOC 2](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2) Trust Services Criteria.
 
 ---
 
-## 🚀 Quick Start
+## 1. Quick Start
 
 ### Installation
 
-```bash
-# Install with Go
-go install github.com/theterminalguy/pipedact@latest
+Install via Go:
 
-# Or download the pre-compiled binary for your OS
-curl -sSL https://raw.githubusercontent.com/theterminalguy/pipedact/main/install.sh | sh
+```bash
+go install github.com/theterminalguy/pipedact@latest
 ```
 
-### Usage
+Or download the pre-compiled binary with SHA-256 checksums from [GitHub Releases](https://github.com/theterminalguy/pipedact/releases).
+
+### Run Your First Scan
 
 ```bash
-# Initialize policy manifest in your project
+# 1. Initialize configuration in your project root
 pipedact init
 
-# Run PIPEDA statutory compliance check
+# 2. Scan your source directory
+pipedact check ./src
+
+# 3. Scan with strict exit code (fails CI if high/critical issues exist)
 pipedact check ./src --strict
-
-# Run SOC 2 Type II Trust Services Criteria check
-pipedact check ./src --framework soc2
-
-# Run unified multi-framework scan (PIPEDA + SOC 2 + ISO 27701 + Law 25)
-pipedact check ./src --framework all
-
-# Run with automated remediation (safe autofix for log sinks & consent guards)
-pipedact check ./src --fix
-
-# Run with AI semantic privacy analysis (Gemini, OpenAI, Ollama, or built-in statutory reasoner)
-pipedact check ./src --ai
-
-# Explain any statutory rule or SOC 2 criterion with legal precedents & compliant code
-pipedact explain PIPEDA-7-SAFEGUARD-LOG
-pipedact explain SOC2-CC6-HARDCODED-SECRET
-
-# Export official OPC PIPEDA Schedule 1 Compliance Dossier
-pipedact dossier --framework pipeda --format markdown --out PIPEDA_OPC_DOSSIER.md
-
-# Export AICPA SOC 2 Type II Auditor Evidence Pack
-pipedact dossier --framework soc2 --format markdown --out SOC2_TYPE_II_EVIDENCE_PACK.md
-
-# View technical mapping matrix
-pipedact principles --framework pipeda
-pipedact principles --framework soc2
-
-# Validate Canadian SIN using Luhn mod-10 algorithm
-pipedact validate-sin "046-454-286"
 ```
 
 ---
 
-## 🧪 Sample Code Repository
+## 2. Example Output
 
-Want to see `pipedact` in action on a real application with deliberate compliance violations across TypeScript, Python, and Prisma?
+Pipedact produces actionable terminal output with precise file locations, snippets, and code-level remedies:
 
+```text
+  #1 [HIGH] Principle 7: Safeguards (PIPEDA-7-SAFEGUARD-LOG)
+     Frameworks: PIPEDA: Schedule 1, Clause 4.7 | SOC 2: CC6.7, P6.1
+     src/services/candidates.ts:42
+     Personal Information leaking into application logs without sanitization.
+     > console.log("Processing candidate:", candidate.email);
+     Remedy: Use maskIdentifier() or sha256 pseudonymization before emitting log events.
+
+  #2 [CRITICAL] SOC 2 CC6.1 / Safeguards (SOC2-CC6-HARDCODED-SECRET)
+     Frameworks: SOC 2: CC6.1, CC6.6 | PIPEDA: Clause 4.7
+     src/config/jwt.ts:8
+     Hardcoded credential, private key, or API secret detected in source code.
+     > const jwt_secret = "super_production_secret_token_123456789";
+     Remedy: Store credentials in environment variables or a dedicated secret vault.
+
+─────────────────────────────────────────────────────────────────────────────
+PIPEDA Technical Score: 85% — Substantial Compliance (Action Needed)
+Total Violations: 2 | Gate Status: FAIL (Exit 1)
+```
+
+> [!NOTE]
+> Findings indicate potential technical risks and engineering anti-patterns. They assist developers in mitigating risks before deployment and do not constitute formal legal certification.
+
+Reproduce and test real findings against our companion vulnerable app:  
 👉 **[github.com/theterminalguy/pipedact-sample-app](https://github.com/theterminalguy/pipedact-sample-app)**
 
 ---
 
-## 🤖 Hybrid Static + AI Analysis Architecture
+## 3. What Pipedact Detects
 
-`pipedact` uniquely combines **ultra-fast static analysis** (<10ms) with **semantic AI privacy intelligence**:
-- **Zero-Egress Statutory Reasoner**: Runs offline by default with built-in Canadian statutory knowledge, AICPA Trust Services Criteria, and OPC investigation precedents (no external network egress or API keys required).
-- **Generative AI Providers**: Supports Google Gemini (`GEMINI_API_KEY`), OpenAI (`OPENAI_API_KEY`), and local Ollama (`OLLAMA_HOST`) for deep semantic audits, quasi-identifier linkage analysis, and custom refactoring suggestions.
+Pipedact inspects source code, database models, and API configurations across 15 rules:
 
----
+| Category | Checks Implemented | Purpose / Rationale |
+|:---|:---|:---|
+| **Logging Sinks** | `PIPEDA-7-SAFEGUARD-LOG` | Prevents unredacted PII (emails, SINs, phone numbers) from reaching log aggregators |
+| **Canadian SINs** | `PIPEDA-7-RAW-SIN` | Flags hardcoded Canadian Social Insurance Numbers using federal mod-10 Luhn validation |
+| **Input Accuracy** | `PIPEDA-6-ACCURACY-VALIDATION` | Checks that Canadian SIN input handlers execute Luhn mod-10 validation |
+| **Consent Gating** | `PIPEDA-3-OPTIN-MISSING` | Ensures third-party analytics/ad calls are enclosed in conditional consent checks |
+| **Data Minimization**| `PIPEDA-4-OVER-COLLECTION` | Detects collection of provincial health card numbers in non-health auth payloads |
+| **Schema Retention** | `PIPEDA-5-RETENTION-DISPOSAL` | Verifies database models declare TTL, expiration timestamps, or purge hooks |
+| **Schema Purpose** | `PIPEDA-2-PURPOSE-UNTAGGED` | *Engineering convention*: Enforces `@privacy(purpose: "...")` tags on sensitive columns |
+| **Sub-processors** | `PIPEDA-1-UNVETTED-SUBPROCESSOR`| Flags outbound data dispatch to unvetted third-party metrics and ad brokers |
+| **Access Rights** | `PIPEDA-9-INCOMPLETE-DSR` | Audits Data Subject Access Request export routines for missing table joins |
+| **Openness** | `PIPEDA-8-POLICY-ROUTE-MISSING`| Verifies presence of public privacy route (`/privacy`) on routers |
+| **Secrets in Code**| `SOC2-CC6-HARDCODED-SECRET` | Flags committed API tokens, JWT secrets, and database passwords |
+| **Cookie Flags** | `SOC2-CC6-INSECURE-COOKIE` | Ensures cookies are emitted with `secure: true` and `httpOnly: true` |
+| **Weak Crypto** | `SOC2-CC6-WEAK-CRYPTO` | Detects deprecated and broken hashing functions (MD5, SHA-1) |
+| **CORS Boundaries**| `SOC2-CC6-WILDCARD-CORS` | Disallows permissive wildcard `origin: '*'` configurations on API endpoints |
 
-## 📊 Cross-Framework Statutory & Criteria Matrix
-
-`pipedact` unifies compliance criteria across Canadian legislation and international standards:
-
-| Gate ID | PIPEDA Schedule 1 | SOC 2 Type II | ISO/IEC 27701 | Quebec Law 25 | Automated Technical Gate | Severity |
-|:---|:---|:---|:---|:---|:---|:---|
-| `PIPEDA-1-UNVETTED-SUBPROCESSOR` | Clause 4.1 | CC6.4, CC9.2 | Clause 7.2.6, 7.5.1 | Section 17 | Audits unvetted sub-processor API/SDK calls | `MEDIUM` |
-| `PIPEDA-2-PURPOSE-UNTAGGED` | Clause 4.2 | P1.1, P3.1 | Clause 7.2.4 | Section 4 | Flags database models lacking `@privacy(purpose)` tags | `MEDIUM` |
-| `PIPEDA-3-OPTIN-MISSING` | Clause 4.3 | P1.1, P2.1, P4.1 | Clause 7.2.1, 7.2.2 | Section 4, 8 | Enforces conditional consent guards on tracking/ads | `HIGH` |
-| `PIPEDA-4-OVER-COLLECTION` | Clause 4.4 | P3.1, P3.2 | Clause 7.2.3 | Section 5 | Detects over-collection (e.g. SIN/Health card in registration) | `HIGH` |
-| `PIPEDA-5-RETENTION-DISPOSAL` | Clause 4.5 | P4.2, P4.3, CC6.5 | Clause 7.4.1, 7.4.2 | Section 23 | Checks for TTL indexes, expiration dates, or purge crons | `MEDIUM` |
-| `PIPEDA-6-ACCURACY-VALIDATION` | Clause 4.6 | P3.2, CC7.1 | Clause 7.2.5 | Section 11 | Validates input boundary validators & Luhn check for SIN | `LOW` |
-| `PIPEDA-7-SAFEGUARD-LOG` | Clause 4.7 | CC6.7, P6.1 | Clause 7.2.8, 8.2.1 | Section 10 | Blocks raw PII flowing to stdout, logs, or unencrypted storage | `HIGH` |
-| `PIPEDA-7-RAW-SIN` | Clause 4.7 | CC6.1, P3.1 | Clause 7.2.8 | Section 10 | Flags hardcoded Canadian SINs using Luhn mod-10 check | `CRITICAL` |
-| `PIPEDA-8-POLICY-ROUTE-MISSING` | Clause 4.8 | P1.1, CC2.1 | Clause 7.3.2 | Section 8 | Verifies presence of public privacy routes (`/privacy`) | `LOW` |
-| `PIPEDA-9-INCOMPLETE-DSR` | Clause 4.9 | P5.1, P5.2 | Clause 7.3.1 | Section 27, 28 | Audits DSR/DSAR user archive export routines | `MEDIUM` |
-| `PIPEDA-10-RECOURSE-MISSING` | Clause 4.10 | P1.2, CC2.2 | Clause 7.3.3 | Section 29 | Verifies privacy dispute intake endpoints/webhooks | `INFO` |
-| `SOC2-CC6-HARDCODED-SECRET` | Clause 4.7 | CC6.1, CC6.6 | Clause 7.2.8 | Section 10 | Detects hardcoded API keys, JWT secrets, passwords | `CRITICAL` |
-| `SOC2-CC6-INSECURE-COOKIE` | Clause 4.7 | CC6.6, CC6.7 | Clause 7.2.8 | Section 10 | Enforces secure and httpOnly cookie attributes | `HIGH` |
-| `SOC2-CC6-WEAK-CRYPTO` | Clause 4.7 | CC6.6 | Clause 7.2.8 | Section 10 | Flags broken cryptographic hashing (MD5, SHA-1) | `HIGH` |
-| `SOC2-CC6-WILDCARD-CORS` | Clause 4.7 | CC6.6 | Clause 7.2.8 | Section 10 | Restricts wildcard Access-Control-Allow-Origin | `MEDIUM` |
+*Detailed rule definitions, code examples, and limitations are documented in [`docs/RULES.md`](docs/RULES.md).*
 
 ---
 
-## 🏛️ Regulatory & Audit FAQ
+## 4. Supported Languages and File Formats
 
-### Do we need an external CPA to certify us for PIPEDA?
-**No.** PIPEDA compliance is governed directly by the Office of the Privacy Commissioner of Canada (OPC). Unlike financial audits, PIPEDA is an ongoing statutory legal obligation. Organizations self-assess their adherence to Schedule 1 principles. `pipedact dossier --framework pipeda` generates the self-assessment dossier recommended by the OPC for formal accountability.
-
-### Do we need an external CPA for SOC 2 Type II?
-**Yes.** While PIPEDA does not require a CPA, an official AICPA SOC 2 Type II report **must** be issued by a licensed CPA firm (operating under AICPA SSAE 18 AT-C Section 205). `pipedact check --framework soc2` and `pipedact dossier --framework soc2` generate the continuous automated technical evidence and testing results that CPA auditors review during their 3–12 month observation window.
-
----
-
----
-
-## 🏷️ Keywords & Index Terms
-
-`pipeda`, `soc2-type-2`, `privacy-as-code`, `compliance-as-code`, `canadian-privacy-law`, `quebec-law-25`, `iso-27701`, `bill-c-27`, `cppa`, `pii-detection`, `sin-validator`, `luhn-algorithm`, `data-protection`, `static-analysis`, `sast`, `devsecops`, `sarif`, `opc-schedule-1`, `continuous-compliance`.
+| Language / File Format | Extension | Status | Tested Checks |
+|:---|:---|:---|:---|
+| **TypeScript / JavaScript** | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs` | **Stable** | Log sinks, consent guards, cookie options, CORS, crypto, secrets |
+| **Python** | `.py` | **Stable** | Standard `logging`, hashlib weak crypto, unvetted HTTP dispatches |
+| **Prisma Schemas** | `.prisma` | **Stable** | Model retention hooks (`expiresAt`, `autoPurge`), purpose attributes |
+| **SQL Schemas** | `.sql` | **Stable** | Sensitive column classification, retention annotations |
+| **Go** | `.go` | **Stable** | Logger calls, crypto/md5, crypto/sha1, hardcoded secrets |
+| **Configuration / Secrets** | `.env*`, `.yaml`, `.yml`, `.json` | **Stable** | Hardcoded secrets, API tokens, dispute URLs |
+| **GraphQL** | `.graphql`, `.gql` | *Beta* | Schema field classifications |
 
 ---
 
-## 📄 License
+## 5. Framework Mappings & Limitations
+
+Pipedact maps its technical checks to multiple privacy and security frameworks:
+
+- **PIPEDA (Canada Federal)**: Aligned with the 10 Fair Information Principles in Schedule 1.
+- **Quebec Law 25**: Cross-mapped for consent, de-identification in logs, and third-party transfer checks.
+- **AICPA SOC 2**: Mapped to selected technical criteria under Security (`CC6.1`, `CC6.6`, `CC6.7`) and Privacy (`P1.1`–`P5.1`).
+- **ISO/IEC 27701**: Cross-mapped to relevant privacy information management controls.
+
+```bash
+# Target specific framework rules
+pipedact check ./src --framework pipeda
+pipedact check ./src --framework soc2
+pipedact check ./src --framework all
+```
+
+> [!IMPORTANT]
+> **Static Analysis Coverage Boundary**: Static analysis evaluates source code patterns at a single point in time. It cannot verify operational controls such as signed vendor agreements, employee access controls, physical security, or SOC 2 operating effectiveness across an audit period.  
+> Read the complete analysis boundary in [`docs/COVERAGE.md`](docs/COVERAGE.md).
+
+---
+
+## 6. Configuration (`.pipedactrc.yaml`)
+
+Initialize a configuration file with `pipedact init`. Example:
+
+```yaml
+version: "1.0"
+jurisdiction: "CA-PIPEDA"
+
+# Organization Privacy Officer details (placeholders)
+privacy_officer:
+  name: "Data Privacy Officer"
+  email: "privacy@organization.ca"
+  dispute_url: "https://organization.ca/legal/privacy/dispute"
+
+# Database schema checks
+schemas:
+  enforcePurposeTags: true # Architectural convention for schema field tagging
+  allowedPurposes:
+    - user_authentication
+    - billing_tax_invoicing
+    - security_fraud_prevention
+
+# Logging sinks redaction
+sinks:
+  disallowedLogIdentifiers:
+    - canadian_sin
+    - credit_card
+    - email_address
+    - phone_number
+
+# Retention policy baseline (organizational threshold, not a statutory mandate)
+retention:
+  defaultMaxTtlDays: 730
+  requireHardDeleteSchedule: true
+
+ignore:
+  - "**/*_test.go"
+  - "**/*.spec.ts"
+  - "node_modules/**"
+  - "dist/**"
+```
+
+---
+
+## 7. CI/CD Integration
+
+### GitHub Actions Workflow
+
+Create `.github/workflows/pipedact.yml`:
+
+```yaml
+name: Privacy & Security Gate
+on: [push, pull_request]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+      - name: Install pipedact
+        run: go install github.com/theterminalguy/pipedact@latest
+      - name: Run Privacy & Security Checks
+        run: pipedact check . --strict --format sarif --out audit.sarif
+      - name: Upload SARIF to GitHub Code Scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: audit.sarif
+```
+
+### Exit Codes
+- `0`: Clean scan or violations below `--fail-on` threshold.
+- `1`: High or Critical violations detected (or any violation when `--strict` is enabled).
+
+---
+
+## 8. AI Analysis & Data Privacy
+
+Pipedact supports optional AI-assisted privacy analysis (`--ai`) to explain findings and detect semantic risks.
+
+### Privacy & Data Egress Guarantees
+- **Offline Local Mode (Default)**: By default, Pipedact uses a deterministic statutory reasoner with **zero network egress**. No code leaves your machine.
+- **Local LLMs via Ollama**: Set `OLLAMA_HOST` to run open-weights models (e.g. Llama 3) completely on-premise.
+- **Commercial Cloud LLMs**: Setting `GEMINI_API_KEY` or `OPENAI_API_KEY` sends only the specific flagged code snippets and rule IDs to the selected provider for refactoring advice. No repository cloning or background indexing occurs.
+
+```bash
+# Offline local analysis (zero egress)
+pipedact check ./src --ai --ai-provider heuristic
+
+# Local on-premise LLM via Ollama
+pipedact check ./src --ai --ai-provider ollama
+
+# Explain a specific rule with legal summaries and compliant examples
+pipedact explain PIPEDA-7-SAFEGUARD-LOG
+```
+
+---
+
+## 9. Automated Remediation (`--fix`)
+
+Pipedact includes a conservative automated patcher:
+
+```bash
+pipedact check ./src --fix
+```
+
+- **Scope**: Automatically masks PII in simple log statements (e.g., wrapping variables in `maskIdentifier()`) and adds missing conditional opt-in guards.
+- **Safety**: `--fix` never modifies authentication logic, database queries, or authorization middleware.
+
+---
+
+## 10. Reporting
+
+Generate markdown reports for engineering reviews and auditor prep:
+
+```bash
+# PIPEDA Schedule 1 technical assessment report
+pipedact dossier --framework pipeda --format markdown --out PIPEDA_REPORT.md
+
+# SOC 2 Trust Services Criteria technical findings report
+pipedact dossier --framework soc2 --format markdown --out SOC2_REPORT.md
+```
+
+---
+
+## Documentation & Policies
+
+- **Rule Inventory & Examples**: [`docs/RULES.md`](docs/RULES.md)
+- **Coverage Limitations & Legal Scope**: [`docs/COVERAGE.md`](docs/COVERAGE.md)
+- **Security & Vulnerability Disclosure**: [`SECURITY.md`](SECURITY.md)
+- **Reference Vulnerable Application**: [theterminalguy/pipedact-sample-app](https://github.com/theterminalguy/pipedact-sample-app)
+
+---
+
+## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).

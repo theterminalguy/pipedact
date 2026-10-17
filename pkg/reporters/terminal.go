@@ -27,25 +27,25 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 	switch result.Framework {
 	case core.FrameworkSOC2:
 		bold.Fprintf(w, "🛡️  pipedact v1.2.0")
-		fmt.Fprintf(w, " — SOC 2 Type II Trust Services Criteria Scanner (Security & Privacy)\n")
+		fmt.Fprintf(w, " — Security & Privacy Static Scanner (Mapped to SOC 2 Criteria)\n")
 	case core.FrameworkAll:
 		bold.Fprintf(w, "🌐 pipedact v1.2.0")
-		fmt.Fprintf(w, " — Multi-Framework Scanner (PIPEDA / SOC 2 / ISO 27701 / Quebec Law 25)\n")
+		fmt.Fprintf(w, " — Multi-Standard Privacy & Security Scanner (PIPEDA / SOC 2 / ISO 27701 / Law 25)\n")
 	default:
 		bold.Fprintf(w, "🍁 pipedact v1.2.0")
-		fmt.Fprintf(w, " — Statutory Privacy Linter for PIPEDA (CA-Schedule 1)\n")
+		fmt.Fprintf(w, " — Privacy & Security Code Linter (PIPEDA Schedule 1)\n")
 	}
 	gray.Fprintf(w, "   Scanned %d files (%d lines) in %v\n\n", result.ScannedFiles, result.ScannedLines, result.Duration)
 
 	if len(result.Violations) == 0 {
 		if result.Framework == core.FrameworkSOC2 {
-			green.Fprintf(w, "✔ CLEAN SOC 2 AUDIT: No security or privacy criteria exceptions detected.\n")
-			fmt.Fprintf(w, "  All Trust Services Criteria verified. Readiness score: ")
-			green.Fprintf(w, "100%% (Audit Ready)\n\n")
+			green.Fprintf(w, "✔ CLEAN SCAN: No technical exceptions detected for mapped SOC 2 criteria.\n")
+			fmt.Fprintf(w, "  All automated checks passed. Technical readiness score: ")
+			green.Fprintf(w, "100%% (Passing)\n\n")
 		} else {
-			green.Fprintf(w, "✔ CLEAN AUDIT: No statutory compliance violations detected.\n")
-			fmt.Fprintf(w, "  All Fair Information Principles verified. Compliance score: ")
-			green.Fprintf(w, "100%% (Audit Ready)\n\n")
+			green.Fprintf(w, "✔ CLEAN SCAN: No potential privacy violations detected.\n")
+			fmt.Fprintf(w, "  All automated checks passed. Technical score: ")
+			green.Fprintf(w, "100%% (Passing)\n\n")
 		}
 		return
 	}
@@ -103,11 +103,11 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 
 	// Compliance Score Bar & Summary
 	fmt.Fprintf(w, "─────────────────────────────────────────────────────────────────────────────\n")
-	scoreTitle := "PIPEDA Compliance Score: "
+	scoreTitle := "PIPEDA Technical Score: "
 	if result.Framework == core.FrameworkSOC2 {
-		scoreTitle = "SOC 2 Type II Readiness Score: "
+		scoreTitle = "SOC 2 Technical Readiness: "
 	} else if result.Framework == core.FrameworkAll {
-		scoreTitle = "Unified Compliance Score: "
+		scoreTitle = "Multi-Framework Technical Score: "
 	}
 	bold.Fprintf(w, "%s", scoreTitle)
 
@@ -120,14 +120,10 @@ func PrintTerminal(w io.Writer, result *core.AuditResult, strict bool) {
 	}
 
 	if result.Framework == core.FrameworkAll {
-		gray.Fprintf(w, "   PIPEDA Schedule 1 Score: %d%% | SOC 2 Type II Readiness: %d%%\n", result.ComplianceScore, result.SOC2Score)
+		gray.Fprintf(w, "   PIPEDA Score: %d%% | SOC 2 Readiness: %d%%\n", result.ComplianceScore, result.SOC2Score)
 	}
 
-	statusLabel := "Compliance Gate Status: "
-	if result.Framework == core.FrameworkSOC2 {
-		statusLabel = "SOC 2 Gate Status: "
-	}
-	fmt.Fprintf(w, "Total Violations: %d | %s", len(result.Violations), statusLabel)
+	fmt.Fprintf(w, "Total Violations: %d | Gate Status: ", len(result.Violations))
 	if result.Passed {
 		green.Fprintf(w, "PASS (Exit 0)\n\n")
 	} else {
