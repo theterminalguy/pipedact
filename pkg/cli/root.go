@@ -10,12 +10,14 @@ import (
 var (
 	cfgFile string
 	rootCmd = &cobra.Command{
-		Use:   "pipedact",
-		Short: "pipedact 🍁 — Statutory Privacy-as-Code Linter & OPC Compliance Suite for PIPEDA",
+		Use:           "pipedact",
+		Short:         "pipedact 🍁 — Privacy & Security Code Linter for PIPEDA and SOC 2",
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		Long: `pipedact is an open-source static analysis engine and compliance auditor in Go.
-It scans codebases, database schemas, and CI/CD pipelines to ensure compliance with Canada's
-Personal Information Protection and Electronic Documents Act (PIPEDA) and the 10 Fair
-Information Principles in Schedule 1.`,
+It scans codebases, database schemas, and CI/CD pipelines to detect privacy risks, insecure
+patterns, and compliance gaps mapped to PIPEDA Schedule 1, SOC 2 Trust Services Criteria,
+ISO/IEC 27701, and Quebec Law 25.`,
 	}
 )
 

@@ -67,13 +67,51 @@ func TestHeuristicReasonerExplain(t *testing.T) {
 }
 
 func TestResolveProvider(t *testing.T) {
-	p := ResolveProvider("heuristic")
+	p, err := ResolveProvider("heuristic")
+	if err != nil {
+		t.Fatalf("unexpected error resolving heuristic: %v", err)
+	}
 	if p.Name() != "pipedact Statutory Heuristic Reasoner (Offline/Zero-Egress)" {
 		t.Errorf("unexpected provider: %s", p.Name())
 	}
 
-	pAuto := ResolveProvider("auto")
-	if pAuto == nil {
-		t.Errorf("expected provider to be resolved in auto mode")
+	pAuto, err := ResolveProvider("auto")
+	if err != nil || pAuto == nil {
+		t.Errorf("expected provider to be resolved in auto mode, err: %v", err)
+	}
+
+	// Unknown provider should error
+	_, err = ResolveProvider("nonexistent_cloud")
+	if err == nil {
+		t.Errorf("expected error for nonexistent provider, got nil")
+	}
+}
+
+func TestHeuristicReasonerNoViolationsEvidence(t *testing.T) {
+	reasoner := NewHeuristicReasoner()
+	req := &AnalysisRequest{
+		FilesCount:      1,
+		ComplianceScore: 100,
+		ScoreLabel:      "Clean Scan",
+		Violations:      []core.Violation{},
+	}
+
+	res, err := reasoner.Analyze(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Analyze failed: %v", err)
+	}
+
+	if len(res.SemanticRisks) != 0 {
+		t.Errorf("expected 0 semantic risks for clean scan, got %d", len(res.SemanticRisks))
+	}
+
+	if !strings.Contains(res.QuasiIdentifierRisk, "Not assessed") {
+		t.Errorf("expected QuasiIdentifierRisk to be 'Not assessed', got: %s", res.QuasiIdentifierRisk)
+	}
+	if !strings.Contains(res.PurposeAlignment, "Not assessed") {
+		t.Errorf("expected PurposeAlignment to be 'Not assessed', got: %s", res.PurposeAlignment)
+	}
+	if !strings.Contains(res.CrossBorderRisk, "Not assessed") {
+		t.Errorf("expected CrossBorderRisk to be 'Not assessed', got: %s", res.CrossBorderRisk)
 	}
 }

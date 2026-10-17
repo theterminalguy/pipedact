@@ -20,8 +20,9 @@ func newDossierCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "dossier [paths...]",
-		Short: "Generate PIPEDA or SOC 2 technical assessment report",
+		Use:          "dossier [paths...]",
+		Short:        "Generate PIPEDA or SOC 2 technical assessment report",
+		SilenceUsage: true,
 		Long: `Generates a structured technical assessment report synthesizing static analysis findings
 mapped to PIPEDA Schedule 1 principles or AICPA SOC 2 Trust Services Criteria.`,
 		RunE: func(cmd *cobra.Command, args []string) error {

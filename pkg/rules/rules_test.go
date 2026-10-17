@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/theterminalguy/pipedact/pkg/config"
@@ -189,5 +190,97 @@ func TestRuleWildcardCORS(t *testing.T) {
 	violations := r.Inspect(ctx, cfg)
 	if len(violations) == 0 {
 		t.Fatalf("expected violation for wildcard CORS, got none")
+	}
+}
+
+func TestRuleRawSIN_Masking(t *testing.T) {
+	rawSIN := "046-454-286"
+	code := `const employeeSIN = "` + rawSIN + `";`
+	ctx := core.NewFileContext("/src/employee.ts", "src/employee.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleRawSIN{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for SIN")
+	}
+
+	// Verify raw SIN is not in Message
+	if strings.Contains(violations[0].Message, rawSIN) {
+		t.Errorf("violation message leaked raw SIN: %s", violations[0].Message)
+	}
+	// Verify raw SIN is masked in LineText
+	if strings.Contains(violations[0].LineText, rawSIN) {
+		t.Errorf("violation LineText leaked raw SIN: %s", violations[0].LineText)
+	}
+	// Verify masked pattern exists
+	if !strings.Contains(violations[0].Message, "***-***-286") {
+		t.Errorf("expected masked SIN in message, got: %s", violations[0].Message)
+	}
+	if !strings.Contains(violations[0].LineText, "***-***-***") {
+		t.Errorf("expected redacted SIN in LineText, got: %s", violations[0].LineText)
+	}
+}
+
+func TestRuleHardcodedSecret_EnvFallback(t *testing.T) {
+	code := `const apiKey = process.env.API_KEY || "sk_live_abcdef1234567890";`
+	ctx := core.NewFileContext("/src/api.ts", "src/api.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleHardcodedSecret{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation for hardcoded secret fallback with process.env, got none")
+	}
+	// Verify secret is redacted in LineText
+	if strings.Contains(violations[0].LineText, "sk_live_abcdef1234567890") {
+		t.Errorf("secret not redacted in LineText: %s", violations[0].LineText)
+	}
+}
+
+func TestRuleInsecureCookie_Isolation(t *testing.T) {
+	code := `
+// First cookie is secure
+res.cookie('auth_token', token, {
+  secure: true,
+  httpOnly: true
+});
+
+// Second cookie is insecure
+res.cookie('tracking_cookie', id, {
+  secure: false
+});
+`
+	ctx := core.NewFileContext("/src/routes.ts", "src/routes.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleInsecureCookie{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) != 1 {
+		t.Fatalf("expected exactly 1 violation for tracking_cookie, got %d", len(violations))
+	}
+	if violations[0].Line != 9 {
+		t.Errorf("expected violation on line 9, got line %d", violations[0].Line)
+	}
+}
+
+func TestRuleConsentOptIn_LocalScope(t *testing.T) {
+	// 20 lines of code between dummy function and tracking call
+	code := `
+function unrelated() {
+  const hasConsentFor = true;
+}
+` + strings.Repeat("// filler line\n", 20) + `
+async function sendEvent(email: string) {
+  await trackThirdPartyAdConversion({ customerEmail: email });
+}
+`
+	ctx := core.NewFileContext("/src/tracker.ts", "src/tracker.ts", code)
+	cfg := config.DefaultConfig()
+
+	r := &RuleConsentOptIn{}
+	violations := r.Inspect(ctx, cfg)
+	if len(violations) == 0 {
+		t.Fatalf("expected violation when consent check is far away outside enclosing block, got none")
 	}
 }

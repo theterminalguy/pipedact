@@ -135,6 +135,18 @@ func (r *RuleRawSIN) Frameworks() map[core.Framework]string {
 
 var sinExtractor = regexp.MustCompile(`\b\d{3}[-\s]\d{3}[-\s]\d{3}\b`)
 
+func maskSIN(sin string) string {
+	digits := regexp.MustCompile(`\D`).ReplaceAllString(sin, "")
+	if len(digits) >= 3 {
+		return fmt.Sprintf("***-***-%s", digits[len(digits)-3:])
+	}
+	return "***-***-***"
+}
+
+func redactSINLine(line string) string {
+	return sinExtractor.ReplaceAllString(line, "***-***-***")
+}
+
 func (r *RuleRawSIN) Inspect(ctx *core.FileContext, cfg *config.Config) []core.Violation {
 	var violations []core.Violation
 	sev, enabled := EffectiveSeverity(r, cfg)
@@ -151,9 +163,10 @@ func (r *RuleRawSIN) Inspect(ctx *core.FileContext, cfg *config.Config) []core.V
 		matches := sinExtractor.FindAllString(line, -1)
 		for _, m := range matches {
 			isLuhnValid := luhn.IsValidCanadianSIN(m)
-			msg := fmt.Sprintf("Hardcoded Canadian Social Insurance Number (SIN: %s) detected.", m)
+			masked := maskSIN(m)
+			msg := fmt.Sprintf("Hardcoded Canadian Social Insurance Number pattern (%s) detected.", masked)
 			if isLuhnValid {
-				msg += " [Luhn Check Passed: Valid SIN]"
+				msg += " [Luhn Check Passed: Valid format; does not confirm government issuance]"
 			}
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
@@ -162,7 +175,7 @@ func (r *RuleRawSIN) Inspect(ctx *core.FileContext, cfg *config.Config) []core.V
 				Severity:          sev,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
-				LineText:          trimmed,
+				LineText:          redactSINLine(trimmed),
 				Message:           msg,
 				Remediation:       "Never hardcode real or valid test SINs. Store in dedicated vault with encryption-at-rest.",
 				CanAutoFix:        false,
@@ -198,14 +211,26 @@ func (r *RuleConsentOptIn) Frameworks() map[core.Framework]string {
 var optInFalseRegex = regexp.MustCompile(`(?i)optInConfirmed\s*:\s*false`)
 var thirdPartyAdRegex = regexp.MustCompile(`(?i)(trackThirdPartyAdConversion|sendMarketingTelemetry|trackAdConversion)`)
 
+func isGuardedByConsentLocally(lines []string, targetIdx int) bool {
+	start := targetIdx - 15
+	if start < 0 {
+		start = 0
+	}
+	for k := start; k < targetIdx; k++ {
+		l := lines[k]
+		if strings.Contains(l, "hasConsentFor") || strings.Contains(l, "verify_consent") || strings.Contains(l, "consentGuard") || strings.Contains(l, "checkConsent") {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *RuleConsentOptIn) Inspect(ctx *core.FileContext, cfg *config.Config) []core.Violation {
 	var violations []core.Violation
 	sev, enabled := EffectiveSeverity(r, cfg)
 	if !enabled {
 		return nil
 	}
-
-	hasConsentGuard := strings.Contains(ctx.Content, "hasConsentFor") || strings.Contains(ctx.Content, "verify_consent")
 
 	for i, line := range ctx.Lines {
 		trimmed := strings.TrimSpace(line)
@@ -222,25 +247,27 @@ func (r *RuleConsentOptIn) Inspect(ctx *core.FileContext, cfg *config.Config) []
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
-				Message:           r.Description(),
-				Remediation:       "Enclose tracking call in conditional consent guard: `if (hasConsentFor(...))`.",
-				CanAutoFix:        true,
+				Message:           "Outbound tracking fired with unverified or false user opt-in (`optInConfirmed: false`).",
+				Remediation:       "Enclose tracking call in conditional consent guard: `if (hasConsentFor(...))` and ensure opt-in is verified.",
+				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
-		} else if thirdPartyAdRegex.MatchString(line) && !hasConsentGuard {
-			violations = append(violations, core.Violation{
-				RuleID:            r.ID(),
-				PrincipleID:       r.PrincipleID(),
-				Principle:         r.Principle(),
-				Severity:          sev,
-				FilePath:          ctx.FilePath,
-				Line:              i + 1,
-				LineText:          trimmed,
-				Message:           "Third-party tracking call executed without affirmative consent check.",
-				Remediation:       "Enclose tracking call in conditional consent guard: `if (hasConsentFor(...))`.",
-				CanAutoFix:        true,
-				FrameworkMappings: r.Frameworks(),
-			})
+		} else if thirdPartyAdRegex.MatchString(line) {
+			if !isGuardedByConsentLocally(ctx.Lines, i) {
+				violations = append(violations, core.Violation{
+					RuleID:            r.ID(),
+					PrincipleID:       r.PrincipleID(),
+					Principle:         r.Principle(),
+					Severity:          sev,
+					FilePath:          ctx.FilePath,
+					Line:              i + 1,
+					LineText:          trimmed,
+					Message:           "Third-party tracking call executed without affirmative consent check in enclosing block.",
+					Remediation:       "Enclose tracking call in conditional consent guard: `if (hasConsentFor(...))`.",
+					CanAutoFix:        false,
+					FrameworkMappings: r.Frameworks(),
+				})
+			}
 		}
 	}
 	return violations
@@ -257,7 +284,7 @@ func (r *RuleOverCollection) PrincipleID() int       { return 4 }
 func (r *RuleOverCollection) Principle() string     { return "Principle 4: Limiting Collection" }
 func (r *RuleOverCollection) Severity() core.Severity { return core.SeverityHigh }
 func (r *RuleOverCollection) Description() string {
-	return "Sensitive Provincial Health Identifier collected without clear statutory exception under PIPEDA."
+	return "Potential over-collection: Provincial health identifier collected without verified statutory exception under PIPEDA."
 }
 func (r *RuleOverCollection) Frameworks() map[core.Framework]string {
 	return map[core.Framework]string{
@@ -277,8 +304,14 @@ func (r *RuleOverCollection) Inspect(ctx *core.FileContext, cfg *config.Config) 
 		return nil
 	}
 
-	if strings.Contains(ctx.Content, "health_provider_scope") || strings.Contains(ctx.Content, "statutory_health_exception") {
-		return nil
+	// Check if configured schemas explicitly permit health identifiers for authorized purposes
+	if cfg != nil {
+		for _, p := range cfg.Schemas.AllowedPurposes {
+			pLow := strings.ToLower(p)
+			if strings.Contains(pLow, "health") || strings.Contains(pLow, "medical") {
+				return nil
+			}
+		}
 	}
 
 	for i, line := range ctx.Lines {
@@ -296,9 +329,9 @@ func (r *RuleOverCollection) Inspect(ctx *core.FileContext, cfg *config.Config) 
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
 				LineText:          trimmed,
-				Message:           r.Description(),
-				Remediation:       "Remove health identifier from standard retail / auth registration payloads.",
-				CanAutoFix:        true,
+				Message:           "Potential over-collection: Provincial health identifier reference detected. Under PIPEDA Principle 4.4, organizations may not collect health identifiers without statutory authorization or direct medical custodian scope.",
+				Remediation:       "Remove health identifier from standard retail / auth registration payloads, or configure allowedPurposes in .pipedactrc.yaml if operating under health custodian scope.",
+				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
 		}
@@ -480,7 +513,7 @@ func (r *RuleIncompleteDSR) Inspect(ctx *core.FileContext, cfg *config.Config) [
 				LineText:          trimmed,
 				Message:           r.Description(),
 				Remediation:       "Update export handler to bundle billing, consent history, and audit log records.",
-				CanAutoFix:        true,
+				CanAutoFix:        false,
 				FrameworkMappings: r.Frameworks(),
 			})
 		}

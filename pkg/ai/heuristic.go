@@ -102,33 +102,90 @@ func (h *HeuristicReasoner) Analyze(ctx context.Context, req *AnalysisRequest) (
 			Severity:     "MEDIUM",
 			Title:        "Data Subject Access Request Export Omits Associated Tables",
 			Description:  "Individuals have statutory rights under Clause 4.9 to receive an exhaustive archive of all personal data held, including consent logs and telemetry.",
-			StatutoryRef: "PIPEDA Schedule 1, Clause 4.9; Bill C-27 (CPPA Section 55 Data Mobility)",
+			StatutoryRef: "PIPEDA Schedule 1, Clause 4.9; Quebec Law 25, Section 27 (Portability)",
 			Remedy:       "Aggregate userProfile, billingTransactions, accessLogs, and consentHistory in export bundles.",
 		})
 	}
 
-	execSummary := fmt.Sprintf(`### Statutory Compliance Synthesis (Canadian Federal PIPEDA)
-- **Scanned Codebase Score:** %d%% (%s)
-- **Statutory Gate Review:** %d high-priority compliance risks identified.
-- **Regulatory Outlook:** Current code practices pose statutory liability under federal PIPEDA (OPC enforcement) and Quebec Law 25 private right of action.
+	var quasiRisk string
+	if hasSIN && hasLogPII {
+		quasiRisk = "High: Hardcoded Canadian SINs and logging of identifiers detected, creating substantial re-identification risk."
+	} else if hasSIN || hasLogPII {
+		quasiRisk = "Moderate: Sensitive identifiers detected in source code or logging sinks."
+	} else {
+		quasiRisk = "Not assessed: No quasi-identifier exposure patterns detected in scan findings."
+	}
 
-#### Key Architectural Findings:
-1. **Data Minimization:** Explicit statutory exceptions are required to store provincial health cards and Canadian SINs.
-2. **Affirmative Consent Architecture:** Outbound tracking and ad-brokers must be guarded by verifiable user consent.
-3. **Safe Redaction:** Standard log sinks must reject raw user identifiers at the logger middleware boundary.
+	hasUntaggedPurpose := false
+	for _, v := range req.Violations {
+		if v.RuleID == "PIPEDA-2-PURPOSE-UNTAGGED" {
+			hasUntaggedPurpose = true
+			break
+		}
+	}
+
+	var purposeAlignment string
+	if hasUntaggedPurpose {
+		purposeAlignment = "Gaps identified: Database schema contains untagged sensitive columns lacking lawful purpose declarations."
+	} else {
+		purposeAlignment = "Not assessed: No untagged schema or purpose gaps detected in scan findings."
+	}
+
+	var crossBorderRisk string
+	if hasExternalDispatch {
+		crossBorderRisk = "Active: Outbound requests to third-party endpoints or sub-processors detected; review against cross-border data transfer requirements."
+	} else {
+		crossBorderRisk = "Not assessed: No unvetted third-party endpoints or unconsented outbound tracking detected in scan findings."
+	}
+
+	var execSummary string
+	var refactoringAdvice string
+	if len(risks) == 0 {
+		execSummary = fmt.Sprintf(`### Statutory Compliance Synthesis (Canadian Federal PIPEDA)
+- **Scanned Codebase Score:** %d%% (%s)
+- **Statutory Gate Review:** 0 high-priority compliance risks identified.
+- **Regulatory Outlook:** Code passes automated static heuristic checks for implemented rules. Note that legal compliance requires operational and administrative safeguards beyond static analysis.
 
 *(Tip: Set GEMINI_API_KEY, OPENAI_API_KEY, or start Ollama to enable generative AI reasoning alongside this statutory engine.)*`,
-		req.ComplianceScore, req.ScoreLabel, len(risks))
+			req.ComplianceScore, req.ScoreLabel)
+		refactoringAdvice = "Maintain privacy-by-design practices: continue reviewing third-party dependencies, schema migrations, and logging middleware."
+	} else {
+		var findingsList []string
+		if hasHealthCard || hasSIN {
+			findingsList = append(findingsList, "1. **Data Minimization:** Explicit statutory exceptions are required to store provincial health cards and Canadian SINs.")
+		}
+		if hasExternalDispatch {
+			findingsList = append(findingsList, "2. **Affirmative Consent Architecture:** Outbound tracking and ad-brokers must be guarded by verifiable user consent.")
+		}
+		if hasLogPII {
+			findingsList = append(findingsList, "3. **Safe Redaction:** Standard log sinks must reject raw user identifiers at the logger middleware boundary.")
+		}
+		if hasIncompleteDSR {
+			findingsList = append(findingsList, "4. **Data Portability:** Subject export routine should aggregate all associated tables.")
+		}
+
+		execSummary = fmt.Sprintf(`### Statutory Compliance Synthesis (Canadian Federal PIPEDA)
+- **Scanned Codebase Score:** %d%% (%s)
+- **Statutory Gate Review:** %d high-priority compliance risks identified.
+- **Regulatory Outlook:** Flagged technical patterns may represent statutory non-compliance under PIPEDA (Schedule 1) or provincial privacy legislation.
+
+#### Key Architectural Findings:
+%s
+
+*(Tip: Set GEMINI_API_KEY, OPENAI_API_KEY, or start Ollama to enable generative AI reasoning alongside this statutory engine.)*`,
+			req.ComplianceScore, req.ScoreLabel, len(risks), strings.Join(findingsList, "\n"))
+		refactoringAdvice = "Adopt Privacy-by-Design: (1) Tokenize identifiers at the API gateway, (2) Bind database fields to explicit purpose tags, (3) Route third-party tracking through a consent proxy."
+	}
 
 	return &AnalysisResponse{
-		ProviderUsed:       h.Name(),
-		ModelUsed:          "Deterministic Statutory Knowledge Base",
-		ExecutiveSummary:   execSummary,
-		QuasiIdentifierRisk: "Moderate: Combination of IP address, phone, and unredacted email across endpoints allows subject re-identification.",
-		PurposeAlignment:   "Non-compliant: Schema contains untagged financial and identity columns lacking lawful purpose declarations.",
-		CrossBorderRisk:    "Active: Outbound requests to third-party endpoints trigger Canadian cross-border disclosure notification requirements.",
-		SemanticRisks:      risks,
-		RefactoringAdvice:  "Adopt Privacy-by-Design: (1) Tokenize identifiers at the API gateway, (2) Bind database fields to explicit purpose tags, (3) Route third-party tracking through a consent proxy.",
+		ProviderUsed:        h.Name(),
+		ModelUsed:           "Deterministic Statutory Knowledge Base",
+		ExecutiveSummary:    execSummary,
+		QuasiIdentifierRisk: quasiRisk,
+		PurposeAlignment:    purposeAlignment,
+		CrossBorderRisk:     crossBorderRisk,
+		SemanticRisks:       risks,
+		RefactoringAdvice:   refactoringAdvice,
 	}, nil
 }
 

@@ -47,6 +47,11 @@ func (s Severity) Level() int {
 	}
 }
 
+// String returns string representation of Severity.
+func (s Severity) String() string {
+	return string(s)
+}
+
 // Violation represents a statutory or technical finding against PIPEDA Schedule 1, SOC 2, or ISO 27701.
 type Violation struct {
 	RuleID            string               `json:"ruleId"`

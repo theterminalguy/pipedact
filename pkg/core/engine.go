@@ -1,9 +1,11 @@
 package core
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +98,7 @@ func (e *Engine) Scan(targets []string) (*AuditResult, error) {
 	var allViolations []Violation
 	totalLines := 0
 	totalBytes := int64(0)
+	scannedFilesCount := 0
 
 	// Worker pool for concurrent scanning
 	workerCount := 8
@@ -149,6 +152,7 @@ func (e *Engine) Scan(targets []string) (*AuditResult, error) {
 				}
 
 				mu.Lock()
+				scannedFilesCount++
 				totalLines += len(ctx.Lines)
 				totalBytes += info.Size()
 				allViolations = append(allViolations, fileViolations...)
@@ -159,7 +163,18 @@ func (e *Engine) Scan(targets []string) (*AuditResult, error) {
 
 	wg.Wait()
 
-	result := e.calculateResult(allViolations, len(filesToScan), totalLines, totalBytes, time.Since(start))
+	// Deterministic sorting of findings
+	sort.Slice(allViolations, func(i, j int) bool {
+		if allViolations[i].FilePath != allViolations[j].FilePath {
+			return allViolations[i].FilePath < allViolations[j].FilePath
+		}
+		if allViolations[i].Line != allViolations[j].Line {
+			return allViolations[i].Line < allViolations[j].Line
+		}
+		return allViolations[i].RuleID < allViolations[j].RuleID
+	})
+
+	result := e.calculateResult(allViolations, scannedFilesCount, totalLines, totalBytes, time.Since(start))
 	return result, nil
 }
 
@@ -194,11 +209,13 @@ func (e *Engine) calculateResult(violations []Violation, filesCount, linesCount 
 	}
 
 	score := int(math.Round((float64(earned) / float64(totalWeight)) * 100.0))
-	scoreLabel := "High Legal Risk (Non-Compliant)"
-	if score >= 90 {
-		scoreLabel = "Compliant (Audit Ready)"
+	scoreLabel := "High Technical Risk (Significant Exceptions Detected)"
+	if len(violations) == 0 {
+		scoreLabel = "Clean Scan (No Rule Violations)"
+	} else if score >= 90 {
+		scoreLabel = "Low Technical Risk (Minor Exceptions Flagged)"
 	} else if score >= 70 {
-		scoreLabel = "Substantial Compliance (Action Needed)"
+		scoreLabel = "Moderate Technical Risk (Remediation Recommended)"
 	}
 
 	// SOC 2 Trust Services Criteria Status
@@ -245,12 +262,14 @@ func (e *Engine) calculateResult(violations []Violation, filesCount, linesCount 
 	finalLabel := scoreLabel
 	if fw == FrameworkSOC2 {
 		finalScore = soc2Score
-		if soc2Score >= 90 {
-			finalLabel = "Audit Ready (Type II Evidence Verified)"
+		if len(violations) == 0 {
+			finalLabel = "Clean Scan (No SOC 2 Rule Violations)"
+		} else if soc2Score >= 90 {
+			finalLabel = "Low Technical Risk (Minor Exceptions Flagged)"
 		} else if soc2Score >= 70 {
-			finalLabel = "Substantial Readiness (Exceptions Flagged)"
+			finalLabel = "Moderate Technical Risk (Exceptions Flagged)"
 		} else {
-			finalLabel = "High Risk / Type II Exceptions Detected"
+			finalLabel = "High Technical Risk (Significant Exceptions Detected)"
 		}
 	}
 
@@ -285,7 +304,7 @@ func (e *Engine) collectFiles(targets []string) ([]string, error) {
 	for _, target := range targets {
 		info, err := os.Stat(target)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("target path not found or inaccessible: %w", err)
 		}
 
 		if !info.IsDir() {

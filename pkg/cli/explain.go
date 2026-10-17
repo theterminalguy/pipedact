@@ -20,7 +20,10 @@ investigation precedents, and compliant refactoring code examples for a given ru
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ruleID := args[0]
-			prov := ai.ResolveProvider(aiProvider)
+			prov, err := ai.ResolveProvider(aiProvider)
+			if err != nil {
+				return err
+			}
 
 			bold := color.New(color.Bold)
 			magenta := color.New(color.FgMagenta, color.Bold)

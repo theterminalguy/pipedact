@@ -28,9 +28,10 @@ func newCheckCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:     "check [paths...]",
-		Aliases: []string{"scan", "lint"},
-		Short:   "Scan codebase for statutory PIPEDA and SOC 2 compliance violations",
+		Use:          "check [paths...]",
+		Aliases:      []string{"scan", "lint"},
+		Short:        "Scan codebase for statutory PIPEDA and SOC 2 compliance violations",
+		SilenceUsage: true,
 		Long: `Recursively analyzes target source files, database schemas, and API calls against
 the 10 Fair Information Principles in PIPEDA Schedule 1, SOC 2 Trust Services Criteria,
 ISO/IEC 27701, and Quebec Law 25.`,
@@ -68,7 +69,11 @@ ISO/IEC 27701, and Quebec Law 25.`,
 				totalPatched := 0
 				for filePath, fViolations := range violationsByFile {
 					report, err := patcher.ApplyFixes(filePath, fViolations)
-					if err == nil && report.Modified {
+					if err != nil {
+						color.New(color.FgYellow).Fprintf(os.Stderr, "[remediation] Warning: failed to apply fixes to %s: %v\n", filePath, err)
+						continue
+					}
+					if report.Modified {
 						totalPatched += len(report.PatchedRules)
 						color.New(color.FgGreen).Printf("[remediation] Automatically patched %d issues in %s\n", len(report.PatchedRules), filePath)
 					}
@@ -76,15 +81,26 @@ ISO/IEC 27701, and Quebec Law 25.`,
 
 				if totalPatched > 0 {
 					// Re-scan to update violations and score
-					result, _ = engine.Scan(args)
+					var rescanErr error
+					result, rescanErr = engine.Scan(args)
+					if rescanErr != nil {
+						return fmt.Errorf("rescan after auto-remediation failed: %w", rescanErr)
+					}
 				}
 			}
 
 			// Optional AI semantic privacy reasoning
 			var aiRes *ai.AnalysisResponse
 			if enableAI {
-				prov := ai.ResolveProvider(aiProvider)
-				aiRes, _ = ai.RunAIAnalysis(cmd.Context(), result, prov)
+				prov, provErr := ai.ResolveProvider(aiProvider)
+				if provErr != nil {
+					return fmt.Errorf("ai provider error: %w", provErr)
+				}
+				var aiErr error
+				aiRes, aiErr = ai.RunAIAnalysis(cmd.Context(), result, prov)
+				if aiErr != nil {
+					color.New(color.FgYellow).Fprintf(os.Stderr, "Warning: AI semantic analysis failed: %v\n", aiErr)
+				}
 			}
 
 			// Format and output results
@@ -133,20 +149,22 @@ ISO/IEC 27701, and Quebec Law 25.`,
 			// Determine exit code
 			failThreshold := core.ParseSeverity(failOn)
 			shouldFail := false
+			failCount := 0
 
 			if strict && len(result.Violations) > 0 {
 				shouldFail = true
+				failCount = len(result.Violations)
 			} else {
 				for _, v := range result.Violations {
 					if v.Severity.Level() >= failThreshold.Level() {
 						shouldFail = true
-						break
+						failCount++
 					}
 				}
 			}
 
 			if shouldFail {
-				os.Exit(1)
+				return fmt.Errorf("compliance policy threshold exceeded: %d violations meeting or exceeding %s severity", failCount, failThreshold.String())
 			}
 
 			return nil

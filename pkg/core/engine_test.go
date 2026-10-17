@@ -114,3 +114,47 @@ func TestEngineScanSOC2Framework(t *testing.T) {
 		t.Errorf("expected SOC2Status populated, got empty")
 	}
 }
+
+func TestEngineScanNonexistentTarget(t *testing.T) {
+	cfg := config.DefaultConfig()
+	engine := core.NewEngine(cfg, nil)
+
+	_, err := engine.Scan([]string{"/nonexistent/directory/or/file"})
+	if err == nil {
+		t.Fatalf("expected error when scanning nonexistent target, got nil")
+	}
+}
+
+func TestEngineScanDeterministicOrder(t *testing.T) {
+	cfg := config.DefaultConfig()
+	registry := rules.NewRegistry()
+
+	var inspectors []core.RuleInspector
+	for _, r := range registry.All() {
+		inspectors = append(inspectors, r)
+	}
+
+	engine := core.NewEngine(cfg, inspectors)
+	targetDir := filepath.Join("..", "..", "testdata")
+
+	res1, err := engine.Scan([]string{targetDir})
+	if err != nil {
+		t.Fatalf("scan 1 failed: %v", err)
+	}
+	res2, err := engine.Scan([]string{targetDir})
+	if err != nil {
+		t.Fatalf("scan 2 failed: %v", err)
+	}
+
+	if len(res1.Violations) != len(res2.Violations) {
+		t.Fatalf("mismatched violation counts: %d vs %d", len(res1.Violations), len(res2.Violations))
+	}
+
+	for i := range res1.Violations {
+		v1 := res1.Violations[i]
+		v2 := res2.Violations[i]
+		if v1.FilePath != v2.FilePath || v1.Line != v2.Line || v1.RuleID != v2.RuleID {
+			t.Errorf("finding order mismatch at %d: %s:%d vs %s:%d", i, v1.FilePath, v1.Line, v2.FilePath, v2.Line)
+		}
+	}
+}

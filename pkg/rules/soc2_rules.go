@@ -30,7 +30,25 @@ func (r *RuleHardcodedSecret) Frameworks() map[core.Framework]string {
 	}
 }
 
-var secretPattern = regexp.MustCompile(`(?i)(api_?key|jwt_?secret|auth_?token|db_?password)\s*[:=]\s*["'][A-Za-z0-9_\-\.]{16,}["']`)
+var (
+	awsKeyRegex      = regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`)
+	slackTokenRegex  = regexp.MustCompile(`\bxox[baprs]-[0-9A-Za-z-]{10,}\b`)
+	privateKeyRegex  = regexp.MustCompile(`-----BEGIN (?:[A-Z0-9_-]+ )?PRIVATE KEY-----`)
+	githubTokenRegex = regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9_]{36,}\b`)
+
+	secretKeyNameRegex = regexp.MustCompile(`(?i)\b(api_?key|jwt_?secret|auth_?token|db_?password|access_?token|secret_?key|client_?secret|signing_?key)\b`)
+	quotedStringRegex  = regexp.MustCompile(`["']([A-Za-z0-9_\-\.\$\/+=]{16,})["']`)
+)
+
+func redactSecrets(line string) string {
+	redacted := awsKeyRegex.ReplaceAllString(line, "AKIA[REDACTED_AWS_KEY]")
+	redacted = slackTokenRegex.ReplaceAllString(redacted, "xox-[REDACTED_SLACK_TOKEN]")
+	redacted = githubTokenRegex.ReplaceAllString(redacted, "ghp_[REDACTED_GH_TOKEN]")
+	if secretKeyNameRegex.MatchString(redacted) {
+		redacted = quotedStringRegex.ReplaceAllString(redacted, `"[REDACTED_SECRET]"`)
+	}
+	return redacted
+}
 
 func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config) []core.Violation {
 	var violations []core.Violation
@@ -45,7 +63,28 @@ func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config)
 			continue
 		}
 
-		if secretPattern.MatchString(line) && !strings.Contains(line, "process.env") && !strings.Contains(line, "os.Getenv") {
+		isSecretFound := false
+
+		// Check known provider-specific patterns
+		if awsKeyRegex.MatchString(line) || slackTokenRegex.MatchString(line) ||
+			privateKeyRegex.MatchString(line) || githubTokenRegex.MatchString(line) {
+			isSecretFound = true
+		} else if secretKeyNameRegex.MatchString(line) {
+			// Check if literal high-entropy secret string is assigned
+			matches := quotedStringRegex.FindAllStringSubmatch(line, -1)
+			for _, m := range matches {
+				val := strings.ToLower(m[1])
+				// Ignore explicit placeholder values
+				if strings.Contains(val, "placeholder") || strings.Contains(val, "your_") ||
+					strings.Contains(val, "example_") || val == "0000000000000000" {
+					continue
+				}
+				isSecretFound = true
+				break
+			}
+		}
+
+		if isSecretFound {
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
@@ -53,7 +92,7 @@ func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config)
 				Severity:          sev,
 				FilePath:          ctx.FilePath,
 				Line:              i + 1,
-				LineText:          trimmed,
+				LineText:          redactSecrets(trimmed),
 				Message:           r.Description(),
 				Remediation:       "Store credentials in environment variables or a secret vault (AWS Secrets Manager, Vault, GCP Secret Manager).",
 				CanAutoFix:        false,
@@ -95,18 +134,52 @@ func (r *RuleInsecureCookie) Inspect(ctx *core.FileContext, cfg *config.Config) 
 		return nil
 	}
 
-	for i, line := range ctx.Lines {
+	for i := 0; i < len(ctx.Lines); i++ {
+		line := ctx.Lines[i]
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 
 		if cookieCallRegex.MatchString(line) {
-			// Check if same line or subsequent lines declare secure: true
-			hasSecure := strings.Contains(line, "secure: true") || strings.Contains(line, "secure: true")
-			hasInsecure := strings.Contains(line, "secure: false") || !strings.Contains(ctx.Content, "secure: true")
+			// Extract arguments block starting from this line up to matching closing parenthesis or 15 lines
+			var blockLines []string
+			parenDepth := 0
+			endLine := i
 
-			if hasInsecure && !hasSecure {
+			for j := i; j < len(ctx.Lines) && j < i+15; j++ {
+				l := ctx.Lines[j]
+				blockLines = append(blockLines, l)
+				parenDepth += strings.Count(l, "(") - strings.Count(l, ")")
+				endLine = j
+				if parenDepth <= 0 && j > i {
+					break
+				}
+				if strings.Contains(l, ");") {
+					break
+				}
+			}
+
+			blockText := strings.ToLower(strings.Join(blockLines, " "))
+
+			hasSecureFalse := strings.Contains(blockText, "secure: false") || strings.Contains(blockText, "secure=false")
+			hasSecureTrue := strings.Contains(blockText, "secure: true") || strings.Contains(blockText, "secure=true")
+			secureInsecure := hasSecureFalse || !hasSecureTrue
+
+			hasHttpOnlyFalse := strings.Contains(blockText, "httponly: false") || strings.Contains(blockText, "httponly=false")
+			hasHttpOnlyTrue := strings.Contains(blockText, "httponly: true") || strings.Contains(blockText, "httponly=true")
+			httpOnlyInsecure := hasHttpOnlyFalse || !hasHttpOnlyTrue
+
+			if secureInsecure || httpOnlyInsecure {
+				var reason string
+				if secureInsecure && httpOnlyInsecure {
+					reason = "HTTP cookie set without 'secure: true' and 'httpOnly: true' transmission safeguards."
+				} else if secureInsecure {
+					reason = "HTTP cookie set without 'secure: true' transmission safeguard (cleartext transport risk)."
+				} else {
+					reason = "HTTP cookie set without 'httpOnly: true' safeguard (XSS token theft risk)."
+				}
+
 				violations = append(violations, core.Violation{
 					RuleID:            r.ID(),
 					PrincipleID:       r.PrincipleID(),
@@ -115,11 +188,15 @@ func (r *RuleInsecureCookie) Inspect(ctx *core.FileContext, cfg *config.Config) 
 					FilePath:          ctx.FilePath,
 					Line:              i + 1,
 					LineText:          trimmed,
-					Message:           r.Description(),
+					Message:           reason,
 					Remediation:       "Set cookie options: { secure: true, httpOnly: true, sameSite: 'strict' }.",
 					CanAutoFix:        false,
 					FrameworkMappings: r.Frameworks(),
 				})
+			}
+
+			if endLine > i {
+				i = endLine
 			}
 		}
 	}

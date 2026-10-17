@@ -983,14 +983,17 @@ export async function generateUserArchive(userId: string) {
       document.getElementById('nav-score-badge').textContent = `${scorePercent}%`;
 
       const labelEl = document.getElementById('hero-score-label');
-      if (scorePercent >= 90) {
-        labelEl.textContent = "Compliant (Audit Ready)";
+      if (scorePercent === 100) {
+        labelEl.textContent = "Clean Scan (No Rule Violations)";
+        labelEl.className = "text-[10px] text-emerald-400 font-medium block mt-1";
+      } else if (scorePercent >= 90) {
+        labelEl.textContent = "Low Technical Risk (Minor Exceptions Flagged)";
         labelEl.className = "text-[10px] text-emerald-400 font-medium block mt-1";
       } else if (scorePercent >= 70) {
-        labelEl.textContent = "Substantial Compliance (Action Needed)";
+        labelEl.textContent = "Moderate Technical Risk (Remediation Recommended)";
         labelEl.className = "text-[10px] text-amber-400 font-medium block mt-1";
       } else {
-        labelEl.textContent = "High Legal Risk (Non-Compliant)";
+        labelEl.textContent = "High Technical Risk (Significant Exceptions Detected)";
         labelEl.className = "text-[10px] text-rose-400 font-medium block mt-1";
       }
     }

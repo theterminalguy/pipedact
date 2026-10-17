@@ -29,6 +29,12 @@ func (p *Patcher) ApplyFixes(filePath string, violations []core.Violation) (*Fix
 		FilePath: filePath,
 	}
 
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return report, err
+	}
+	filePerm := info.Mode().Perm()
+
 	contentBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return report, err
@@ -47,14 +53,6 @@ func (p *Patcher) ApplyFixes(filePath string, violations []core.Violation) (*Fix
 			content = patchSafeguardLog(content)
 			report.PatchedRules = append(report.PatchedRules, v.RuleID)
 
-		case "PIPEDA-3-OPTIN-MISSING":
-			content = patchConsentOptIn(content)
-			report.PatchedRules = append(report.PatchedRules, v.RuleID)
-
-		case "PIPEDA-4-OVER-COLLECTION":
-			content = patchOverCollection(content)
-			report.PatchedRules = append(report.PatchedRules, v.RuleID)
-
 		case "PIPEDA-2-PURPOSE-UNTAGGED":
 			content = patchPurposeUntagged(content)
 			report.PatchedRules = append(report.PatchedRules, v.RuleID)
@@ -67,7 +65,7 @@ func (p *Patcher) ApplyFixes(filePath string, violations []core.Violation) (*Fix
 
 	if content != original {
 		report.Modified = true
-		if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte(content), filePerm); err != nil {
 			return report, err
 		}
 	}
@@ -91,7 +89,7 @@ func patchSafeguardLog(content string) string {
 			content = reLogEmail.ReplaceAllString(content, "$1email: maskIdentifier(email),")
 		}
 		// Ensure import
-		if strings.Contains(content, "maskIdentifier(email)") && !strings.Contains(content, "maskIdentifier") {
+		if strings.Contains(content, "maskIdentifier(email)") && !strings.Contains(content, "import { maskIdentifier }") {
 			content = "import { maskIdentifier } from '../privacy/redact';\n" + content
 		}
 	}
@@ -109,35 +107,6 @@ func patchSafeguardLog(content string) string {
 		}
 	}
 
-	return content
-}
-
-func patchConsentOptIn(content string) string {
-	if strings.Contains(content, "optInConfirmed: false") {
-		content = strings.Replace(content, "optInConfirmed: false", "optInConfirmed: true", 1)
-	}
-
-	if strings.Contains(content, "await trackThirdPartyAdConversion") && !strings.Contains(content, "hasConsentFor") {
-		re := regexp.MustCompile(`(?m)^(\s*)(await trackThirdPartyAdConversion\(\{[\s\S]*?\}\);)`)
-		if re.MatchString(content) {
-			content = re.ReplaceAllString(content, "$1if (hasConsentFor(userConsents, 'marketing_analytics')) {\n$1  $2\n$1}")
-			if !strings.Contains(content, "hasConsentFor") && (strings.Contains(content, "import ") || strings.Contains(content, "require")) {
-				content = "import { hasConsentFor } from '../privacy/consent-guard';\n" + content
-			}
-		}
-	}
-
-	return content
-}
-
-func patchOverCollection(content string) string {
-	// Remove healthCardNumber from body destructuring & db create
-	content = strings.Replace(content, ", healthCardNumber", "", -1)
-	content = strings.Replace(content, "healthCardNumber,", "", -1)
-	content = strings.Replace(content, "healthCardNumber: healthCardNumber,", "", -1)
-	content = strings.Replace(content, "healthCardNumber: healthCardNumber", "", -1)
-	re := regexp.MustCompile(`\n\s*healthCardNumber:.*`)
-	content = re.ReplaceAllString(content, "")
 	return content
 }
 
