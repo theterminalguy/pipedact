@@ -460,7 +460,17 @@ func (r *RuleRetentionDisposal) Inspect(ctx *core.FileContext, cfg *config.Confi
 		return nil
 	}
 
-	hasAutoPurge := strings.Contains(ctx.Content, "autoPurge") || strings.Contains(ctx.Content, "expiresAt") || strings.Contains(ctx.Content, "ttl")
+	hasAutoPurge := false
+	for i := 0; i < len(ctx.Lines); i++ {
+		if ctx.IsCommentLine(i) {
+			continue
+		}
+		c := ctx.GetCodeLine(i)
+		if strings.Contains(c, "autoPurge") || strings.Contains(c, "expiresAt") || strings.Contains(c, "ttl") {
+			hasAutoPurge = true
+			break
+		}
+	}
 
 	for i, line := range ctx.Lines {
 		if ctx.IsCommentLine(i) {
@@ -520,7 +530,21 @@ func (r *RuleIncompleteDSR) Inspect(ctx *core.FileContext, cfg *config.Config) [
 		return nil
 	}
 
-	hasFullExport := strings.Contains(ctx.Content, "transactions") && strings.Contains(ctx.Content, "accessLogs")
+	hasTransactions := false
+	hasAccessLogs := false
+	for i := 0; i < len(ctx.Lines); i++ {
+		if ctx.IsCommentLine(i) {
+			continue
+		}
+		c := ctx.GetCodeLine(i)
+		if strings.Contains(c, "transactions") {
+			hasTransactions = true
+		}
+		if strings.Contains(c, "accessLogs") {
+			hasAccessLogs = true
+		}
+	}
+	hasFullExport := hasTransactions && hasAccessLogs
 
 	for i, line := range ctx.Lines {
 		if ctx.IsCommentLine(i) {
@@ -638,7 +662,17 @@ func (r *RuleAccuracyValidator) Inspect(ctx *core.FileContext, cfg *config.Confi
 		return nil
 	}
 
-	hasLuhnValidator := strings.Contains(ctx.Content, "isValidCanadianSIN") || strings.Contains(ctx.Content, "sinValidator") || strings.Contains(ctx.Content, "luhn")
+	hasLuhnValidator := false
+	for i := 0; i < len(ctx.Lines); i++ {
+		if ctx.IsCommentLine(i) {
+			continue
+		}
+		c := ctx.GetCodeLine(i)
+		if strings.Contains(c, "isValidCanadianSIN") || strings.Contains(c, "sinValidator") || strings.Contains(c, "luhn") {
+			hasLuhnValidator = true
+			break
+		}
+	}
 
 	for i, line := range ctx.Lines {
 		if ctx.IsCommentLine(i) {
