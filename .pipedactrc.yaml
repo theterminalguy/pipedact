@@ -41,6 +41,7 @@ ignore:
   - "**/*.spec.ts"
   - "**/*.test.ts"
   - "testdata/**"
+  - "pkg/ai/**"
   - "pkg/fix/**"
   - "pkg/rules/**"
   - "pkg/web/static/**"
