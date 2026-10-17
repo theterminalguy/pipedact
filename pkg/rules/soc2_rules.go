@@ -35,8 +35,9 @@ var (
 	slackTokenRegex  = regexp.MustCompile(`\bxox[baprs]-[0-9A-Za-z-]{10,}\b`)
 	privateKeyRegex  = regexp.MustCompile(`-----BEGIN (?:[A-Z0-9_-]+ )?PRIVATE KEY-----`)
 	githubTokenRegex = regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9_]{36,}\b`)
+	stripeKeyRegex   = regexp.MustCompile(`\bsk_(?:live|test)_[0-9a-zA-Z]{16,}\b`)
 
-	secretKeyNameRegex = regexp.MustCompile(`(?i)\b(api_?key|jwt_?secret|auth_?token|db_?password|access_?token|secret_?key|client_?secret|signing_?key)\b`)
+	secretKeyNameRegex = regexp.MustCompile(`(?i)(?:[a-z0-9_]*(?:api_?key|jwt_?secret|auth_?token|db_?password|access_?token|secret_?key|client_?secret|signing_?key|private_?key))\b`)
 	quotedStringRegex  = regexp.MustCompile(`["']([A-Za-z0-9_\-\.\$\/+=]{16,})["']`)
 )
 
@@ -44,6 +45,7 @@ func redactSecrets(line string) string {
 	redacted := awsKeyRegex.ReplaceAllString(line, "AKIA[REDACTED_AWS_KEY]")
 	redacted = slackTokenRegex.ReplaceAllString(redacted, "xox-[REDACTED_SLACK_TOKEN]")
 	redacted = githubTokenRegex.ReplaceAllString(redacted, "ghp_[REDACTED_GH_TOKEN]")
+	redacted = stripeKeyRegex.ReplaceAllString(redacted, "sk_[REDACTED_STRIPE_KEY]")
 	if secretKeyNameRegex.MatchString(redacted) {
 		redacted = quotedStringRegex.ReplaceAllString(redacted, `"[REDACTED_SECRET]"`)
 	}
@@ -68,7 +70,8 @@ func (r *RuleHardcodedSecret) Inspect(ctx *core.FileContext, cfg *config.Config)
 
 		// Check known provider-specific patterns
 		if awsKeyRegex.MatchString(code) || slackTokenRegex.MatchString(code) ||
-			privateKeyRegex.MatchString(code) || githubTokenRegex.MatchString(code) {
+			privateKeyRegex.MatchString(code) || githubTokenRegex.MatchString(code) ||
+			stripeKeyRegex.MatchString(code) {
 			isSecretFound = true
 		} else if secretKeyNameRegex.MatchString(code) {
 			// Check if literal high-entropy secret string is assigned
