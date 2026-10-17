@@ -53,6 +53,9 @@ func (r *RuleSafeguardLog) Inspect(ctx *core.FileContext, cfg *config.Config) []
 
 		// Single line match
 		if logSinkRegex.MatchString(code) {
+			if strings.Contains(code, "maskIdentifier") || strings.Contains(code, "hash") || strings.Contains(code, "redact") || strings.Contains(code, "sha256") || strings.Contains(code, "pseudonymize") {
+				continue
+			}
 			violations = append(violations, core.Violation{
 				RuleID:            r.ID(),
 				PrincipleID:       r.PrincipleID(),
