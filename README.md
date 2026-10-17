@@ -1,6 +1,9 @@
 # pipedact 🍁🛡️
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![GitHub release](https://img.shields.io/github/v/release/theterminalguy/pipedact?color=blue)](https://github.com/theterminalguy/pipedact/releases)
+[![CI](https://github.com/theterminalguy/pipedact/actions/workflows/ci.yml/badge.svg)](https://github.com/theterminalguy/pipedact/actions/workflows/ci.yml)
+[![PIPEDA Gate](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda-gate.yml/badge.svg)](https://github.com/theterminalguy/pipedact/actions/workflows/pipeda-gate.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/theterminalguy/pipedact)](https://goreportcard.com/report/github.com/theterminalguy/pipedact)
 [![Jurisdiction: CA-PIPEDA](https://img.shields.io/badge/Jurisdiction-CA--PIPEDA%20%7C%20Bill%20C--27-crimson.svg)](https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/)
 [![Framework: SOC 2 Type II](https://img.shields.io/badge/Framework-AICPA%20SOC%202%20Type%20II-teal.svg)](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2)
@@ -135,6 +138,14 @@ Want to see `pipedact` in action on a real application with deliberate complianc
 
 ### Do we need an external CPA for SOC 2 Type II?
 **Yes.** While PIPEDA does not require a CPA, an official AICPA SOC 2 Type II report **must** be issued by a licensed CPA firm (operating under AICPA SSAE 18 AT-C Section 205). `pipedact check --framework soc2` and `pipedact dossier --framework soc2` generate the continuous automated technical evidence and testing results that CPA auditors review during their 3–12 month observation window.
+
+---
+
+---
+
+## 🏷️ Keywords & Index Terms
+
+`pipeda`, `soc2-type-2`, `privacy-as-code`, `compliance-as-code`, `canadian-privacy-law`, `quebec-law-25`, `iso-27701`, `bill-c-27`, `cppa`, `pii-detection`, `sin-validator`, `luhn-algorithm`, `data-protection`, `static-analysis`, `sast`, `devsecops`, `sarif`, `opc-schedule-1`, `continuous-compliance`.
 
 ---
 
