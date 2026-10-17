@@ -1,0 +1,28 @@
+# Binaries
+bin/
+dist/
+pipedact
+
+# Architecture & OS specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test & report artifacts
+*.test
+*.out
+coverage.txt
+*.sarif
+PIPEDA_OPC_SELF_ASSESSMENT_DOSSIER.md
+
+# Go workspace
+go.work
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
